@@ -25,7 +25,6 @@ from .const import (
     DEFAULT_CONTEXT_MAX_CHARS,
     DEFAULT_INCLUDE_EXPOSED_ENTITIES,
     DEFAULT_MAX_HISTORY_MESSAGES,
-    DEFAULT_PROMPT,
 )
 
 _LOGGER = logging.getLogger(__name__)
@@ -58,22 +57,22 @@ class HermesConversationAgent(AbstractConversationAgent):
         """Process a conversation turn."""
         options = self.entry.options
 
-        # Build system prompt
+        # Build system prompt (optional — Hermes Agent has its own)
         system_prompt = self._render_system_prompt(options)
 
         # Append extra system prompt from HA voice pipeline if present
         extra = getattr(user_input, "extra_system_prompt", None)
         if extra:
-            system_prompt += "\n\n" + extra
+            system_prompt = (system_prompt + "\n\n" + extra) if system_prompt else extra
 
         # Get or create conversation history
         conv_id = user_input.conversation_id or "default"
         history = self._history.setdefault(conv_id, [])
 
-        # Build messages: system + history + new user message
-        messages: list[dict[str, str]] = [
-            {"role": "system", "content": system_prompt}
-        ]
+        # Build messages: system (if any) + history + new user message
+        messages: list[dict[str, str]] = []
+        if system_prompt:
+            messages.append({"role": "system", "content": system_prompt})
         messages.extend(history)
         messages.append({"role": "user", "content": user_input.text})
 
@@ -137,7 +136,9 @@ class HermesConversationAgent(AbstractConversationAgent):
 
     def _render_system_prompt(self, options: dict[str, Any]) -> str:
         """Render the system prompt template with HA context."""
-        prompt_template = options.get(CONF_PROMPT, DEFAULT_PROMPT)
+        prompt_template = options.get(CONF_PROMPT, "")
+        if not prompt_template:
+            return ""
 
         # Build template variables
         variables: dict[str, Any] = {
