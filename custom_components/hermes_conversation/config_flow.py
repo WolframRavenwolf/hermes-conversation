@@ -165,6 +165,8 @@ class HermesConversationConfigFlow(ConfigFlow, domain=DOMAIN):
                 self._discovered_host,
                 self._discovered_port,
                 self._discovered_api_key,
+                use_ssl=False,
+                verify_ssl=False,
             )
             try:
                 await client.async_check_connection()
