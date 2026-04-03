@@ -56,6 +56,24 @@ class HermesConversationAgent(AbstractConversationAgent):
         self, user_input: ConversationInput
     ) -> ConversationResult:
         """Process a conversation turn."""
+        try:
+            return await self._async_process_inner(user_input)
+        except Exception:
+            _LOGGER.exception("Unexpected error in async_process")
+            intent_response = intent.IntentResponse(language=user_input.language)
+            intent_response.async_set_error(
+                intent.IntentResponseErrorCode.UNKNOWN,
+                "An internal error occurred. Check the logs.",
+            )
+            return ConversationResult(
+                response=intent_response,
+                conversation_id=user_input.conversation_id or "default",
+            )
+
+    async def _async_process_inner(
+        self, user_input: ConversationInput
+    ) -> ConversationResult:
+        """Inner processing — wrapped by async_process for error logging."""
         options = self.entry.options
 
         # Resolve username from HA auth
