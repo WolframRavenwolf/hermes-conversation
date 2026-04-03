@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import logging
+from pathlib import Path
 from typing import Any
 
 import voluptuous as vol
@@ -39,6 +40,8 @@ from .const import (
     DEFAULT_TEMPERATURE,
     DOMAIN,
 )
+
+ADDON_CONFIGS_ROOT = Path("/addon_configs")
 
 _LOGGER = logging.getLogger(__name__)
 
@@ -77,37 +80,34 @@ class HermesConversationConfigFlow(ConfigFlow, domain=DOMAIN):
         return await self.async_step_manual(user_input)
 
     async def _async_discover_addon(self) -> bool:
-        """Try to discover the Hermes Agent add-on via the Supervisor API."""
+        """Discover the Hermes Agent add-on by scanning /addon_configs/.
+
+        The addon slug has a repo-hash prefix (e.g. a0d7b954_hermes_agent)
+        that changes per installation.  We scan the filesystem for any
+        directory ending in '_hermes_agent' or named 'hermes_agent', then
+        derive the Docker hostname from the directory name.
+        """
         try:
-            # Check if hassio integration is available
-            if "hassio" not in self.hass.data:
+            if not ADDON_CONFIGS_ROOT.is_dir():
+                _LOGGER.debug("No /addon_configs/ — not running on HA OS")
                 return False
 
-            # Try to find the addon — the slug has a repo hash prefix
-            # e.g. "a0d7b954_hermes_agent"
-            addon_info = await self._async_find_addon()
-            if addon_info is None:
+            # Find the addon config directory
+            addon_dir = self._find_addon_config_dir()
+            if addon_dir is None:
+                _LOGGER.debug("Hermes Agent add-on config directory not found")
                 return False
 
-            # Check addon is running
-            if addon_info.get("state") != "started":
-                _LOGGER.debug("Hermes Agent add-on is not running")
-                return False
+            # Derive Docker hostname from directory name
+            # e.g. "a0d7b954_hermes_agent" → "a0d7b954-hermes-agent"
+            hostname = addon_dir.name.replace("_", "-")
 
-            # Check API is enabled
-            options = addon_info.get("options", {})
-            if not options.get("enable_api", False):
-                _LOGGER.debug("Hermes Agent API is not enabled in add-on config")
-                return False
-
-            # Get hostname and API key
-            hostname = addon_info.get("hostname", "")
-            if not hostname:
-                return False
+            # Try to read addon options for API key
+            api_key = self._read_addon_api_key(addon_dir)
 
             self._discovered_host = hostname
             self._discovered_port = ADDON_INTERNAL_PORT
-            self._discovered_api_key = options.get("access_password", "") or None
+            self._discovered_api_key = api_key
 
             _LOGGER.info(
                 "Discovered Hermes Agent add-on at %s:%s",
@@ -120,46 +120,35 @@ class HermesConversationConfigFlow(ConfigFlow, domain=DOMAIN):
             _LOGGER.debug("Add-on discovery failed", exc_info=True)
             return False
 
-    async def _async_find_addon(self) -> dict[str, Any] | None:
-        """Find the Hermes Agent addon among installed addons."""
+    @staticmethod
+    def _find_addon_config_dir() -> Path | None:
+        """Find the Hermes Agent addon directory in /addon_configs/."""
         try:
-            from homeassistant.components.hassio import async_get_addon_info
-
-            # Try common slug patterns
-            for slug in [
-                ADDON_SLUG_SUFFIX,
-                f"local_{ADDON_SLUG_SUFFIX}",
-            ]:
-                try:
-                    info = await async_get_addon_info(self.hass, slug)
-                    if info is not None:
-                        return info
-                except Exception:
+            for entry in ADDON_CONFIGS_ROOT.iterdir():
+                if not entry.is_dir():
                     continue
-
-            # If direct slugs don't work, try the Supervisor REST API
-            hassio = self.hass.data.get("hassio")
-            if hassio is None:
-                return None
-
-            result = await hassio.send_command("/addons", method="get")
-            if not result or "data" not in result:
-                return None
-
-            addons = result["data"].get("addons", [])
-            for addon in addons:
-                slug = addon.get("slug", "")
-                if slug.endswith(f"_{ADDON_SLUG_SUFFIX}") or slug == ADDON_SLUG_SUFFIX:
-                    # Found it — get full info
-                    try:
-                        return await async_get_addon_info(self.hass, slug)
-                    except Exception:
-                        return addon
-
+                name = entry.name
+                if (
+                    name == ADDON_SLUG_SUFFIX
+                    or name.endswith(f"_{ADDON_SLUG_SUFFIX}")
+                ):
+                    return entry
+            return None
+        except OSError:
             return None
 
+    @staticmethod
+    def _read_addon_api_key(addon_dir: Path) -> str | None:
+        """Read the access_password from the addon's options.json."""
+        try:
+            import json
+
+            options_file = addon_dir / "options.json"
+            if not options_file.is_file():
+                return None
+            options = json.loads(options_file.read_text())
+            return options.get("access_password", "") or None
         except Exception:
-            _LOGGER.debug("Failed to query addons", exc_info=True)
             return None
 
     async def async_step_confirm(
