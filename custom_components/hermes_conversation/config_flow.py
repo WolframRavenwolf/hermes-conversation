@@ -80,51 +80,123 @@ class HermesConversationConfigFlow(ConfigFlow, domain=DOMAIN):
         return await self.async_step_manual(user_input)
 
     async def _async_discover_addon(self) -> bool:
-        """Discover the Hermes Agent add-on by scanning /addon_configs/.
+        """Discover the Hermes Agent add-on.
 
-        The addon slug has a repo-hash prefix (e.g. a0d7b954_hermes_agent)
-        that changes per installation.  We scan the filesystem for any
-        directory ending in '_hermes_agent' or named 'hermes_agent', then
-        derive the Docker hostname from the directory name.
+        Strategy (same as OpenClaw):
+        1. Supervisor API — check if addon is running, get hostname
+        2. Filesystem scan — find /addon_configs/*_hermes_agent, read options
+
+        The addon slug has a repo-hash prefix (e.g. 0a6523c6_hermes_agent)
+        that changes per installation.
         """
+        # Method 1: Supervisor API
+        if await self._async_discover_via_supervisor():
+            return True
+
+        # Method 2: Filesystem scan (fallback)
+        return await self._async_discover_via_filesystem()
+
+    async def _async_discover_via_supervisor(self) -> bool:
+        """Try discovery via Supervisor API."""
         try:
-            if not ADDON_CONFIGS_ROOT.is_dir():
-                _LOGGER.debug("No /addon_configs/ — not running on HA OS")
+            if "hassio" not in self.hass.data:
                 return False
 
-            # Find the addon config directory
-            addon_dir = self._find_addon_config_dir()
-            if addon_dir is None:
-                _LOGGER.debug("Hermes Agent add-on config directory not found")
+            from homeassistant.components.hassio import async_get_addon_info
+
+            # List all addons to find ours (slug has unknown hash prefix)
+            hassio = self.hass.data.get("hassio")
+            if hassio is None:
                 return False
 
-            # Derive Docker hostname from directory name
-            # e.g. "a0d7b954_hermes_agent" → "a0d7b954-hermes-agent"
-            hostname = addon_dir.name.replace("_", "-")
+            result = await hassio.send_command("/addons", method="get")
+            if not result or "data" not in result:
+                return False
 
-            # Try to read addon options for API key
-            api_key = self._read_addon_api_key(addon_dir)
+            # Find our addon by slug suffix
+            addon_slug = None
+            for addon in result["data"].get("addons", []):
+                slug = addon.get("slug", "")
+                if slug == ADDON_SLUG_SUFFIX or slug.endswith(f"_{ADDON_SLUG_SUFFIX}"):
+                    addon_slug = slug
+                    break
+
+            if addon_slug is None:
+                return False
+
+            # Get full addon info
+            addon_info = await async_get_addon_info(self.hass, addon_slug)
+            if addon_info is None:
+                return False
+
+            if addon_info.get("state") != "started":
+                _LOGGER.debug("Hermes Agent add-on is not running")
+                return False
+
+            hostname = addon_info.get("hostname", "")
+            if not hostname:
+                return False
+
+            options = addon_info.get("options", {})
+            api_key = options.get("access_password", "") or None
 
             self._discovered_host = hostname
             self._discovered_port = ADDON_INTERNAL_PORT
             self._discovered_api_key = api_key
 
             _LOGGER.info(
-                "Discovered Hermes Agent add-on at %s:%s",
+                "Discovered Hermes Agent add-on via Supervisor at %s:%s",
                 self._discovered_host,
                 self._discovered_port,
             )
             return True
 
         except Exception:
-            _LOGGER.debug("Add-on discovery failed", exc_info=True)
+            _LOGGER.debug("Supervisor discovery failed", exc_info=True)
+            return False
+
+    async def _async_discover_via_filesystem(self) -> bool:
+        """Try discovery via filesystem scan of /addon_configs/."""
+        try:
+            # Run blocking I/O in executor (like OpenClaw does)
+            addon_dir = await self.hass.async_add_executor_job(
+                self._find_addon_config_dir
+            )
+            if addon_dir is None:
+                _LOGGER.debug("Hermes Agent add-on config directory not found")
+                return False
+
+            # Derive Docker hostname: "0a6523c6_hermes_agent" → "0a6523c6-hermes-agent"
+            hostname = addon_dir.name.replace("_", "-")
+
+            # Read API key in executor
+            api_key = await self.hass.async_add_executor_job(
+                self._read_addon_api_key, addon_dir
+            )
+
+            self._discovered_host = hostname
+            self._discovered_port = ADDON_INTERNAL_PORT
+            self._discovered_api_key = api_key
+
+            _LOGGER.info(
+                "Discovered Hermes Agent add-on via filesystem at %s:%s",
+                self._discovered_host,
+                self._discovered_port,
+            )
+            return True
+
+        except Exception:
+            _LOGGER.debug("Filesystem discovery failed", exc_info=True)
             return False
 
     @staticmethod
     def _find_addon_config_dir() -> Path | None:
         """Find the Hermes Agent addon directory in /addon_configs/."""
+        if not ADDON_CONFIGS_ROOT.is_dir():
+            _LOGGER.debug("No /addon_configs/ — not running on HA OS")
+            return None
         try:
-            for entry in ADDON_CONFIGS_ROOT.iterdir():
+            for entry in sorted(ADDON_CONFIGS_ROOT.iterdir()):
                 if not entry.is_dir():
                     continue
                 name = entry.name
@@ -132,7 +204,11 @@ class HermesConversationConfigFlow(ConfigFlow, domain=DOMAIN):
                     name == ADDON_SLUG_SUFFIX
                     or name.endswith(f"_{ADDON_SLUG_SUFFIX}")
                 ):
+                    _LOGGER.debug("Found addon config dir: %s", entry)
                     return entry
+            return None
+        except PermissionError:
+            _LOGGER.debug("No permission to scan %s", ADDON_CONFIGS_ROOT)
             return None
         except OSError:
             return None
@@ -140,15 +216,16 @@ class HermesConversationConfigFlow(ConfigFlow, domain=DOMAIN):
     @staticmethod
     def _read_addon_api_key(addon_dir: Path) -> str | None:
         """Read the access_password from the addon's options.json."""
-        try:
-            import json
+        import json
 
+        try:
             options_file = addon_dir / "options.json"
             if not options_file.is_file():
                 return None
-            options = json.loads(options_file.read_text())
+            options = json.loads(options_file.read_text(encoding="utf-8"))
             return options.get("access_password", "") or None
-        except Exception:
+        except (json.JSONDecodeError, OSError) as err:
+            _LOGGER.debug("Error reading %s: %s", addon_dir / "options.json", err)
             return None
 
     def _abort_if_host_port_configured(self, host: str, port: int) -> None:
