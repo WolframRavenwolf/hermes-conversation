@@ -1,9 +1,9 @@
-# Hermes Conversation
+# Hermes Agent
 
 [![HACS](https://img.shields.io/badge/HACS-Custom-orange.svg)](https://hacs.xyz)
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](LICENSE)
 
-A [Home Assistant](https://home-assistant.io/) custom integration that connects [Hermes Agent](https://hermes-agent.nousresearch.com/) as a **conversation agent** for voice assistants and the conversation panel.
+A [Home Assistant](https://home-assistant.io/) custom integration that connects [Hermes Agent](https://hermes-agent.nousresearch.com/) by [Nous Research](https://nousresearch.com/) as a **conversation agent** for voice assistants and the conversation panel.
 
 ## Features
 
@@ -12,7 +12,9 @@ A [Home Assistant](https://home-assistant.io/) custom integration that connects 
 - **Auto-discovery** — automatically detects the [Hermes Agent add-on](https://github.com/WolframRavenwolf/hermes-ha-addon) when running
 - **Entity exposure** — includes your smart home device states in the system prompt
 - **Multi-turn** — maintains conversation history across turns
-- **Configurable** — model, system prompt (Jinja2), temperature, max tokens
+- **Username resolution** — greets the user by name (from HA auth)
+- **Configurable** — system prompt (Jinja2), entity exposure, context limit
+- **Multiple instances** — connect to both the local add-on and an external Hermes Agent
 
 ## Requirements
 
@@ -28,7 +30,7 @@ A [Home Assistant](https://home-assistant.io/) custom integration that connects 
 1. Open HACS in Home Assistant
 2. Click the three dots in the top right → **Custom repositories**
 3. Add `https://github.com/WolframRavenwolf/hermes-conversation` as an **Integration**
-4. Search for "Hermes Conversation" and install it
+4. Search for "Hermes Agent" and install it
 5. Restart Home Assistant
 
 ### Manual
@@ -42,40 +44,43 @@ A [Home Assistant](https://home-assistant.io/) custom integration that connects 
 
 1. Make sure the Hermes Agent add-on is running with **Enable API** turned on
 2. Go to **Settings → Devices & Services → Add Integration**
-3. Search for "Hermes Conversation"
-4. The integration will auto-detect the add-on — click **Submit** to confirm
+3. Search for "Hermes Agent"
+4. If the add-on is detected, choose **Use discovered add-on** or **Configure manually**
+5. Click **Submit** to confirm
 
 ### Manual Setup (Standalone Hermes Agent)
 
 1. Go to **Settings → Devices & Services → Add Integration**
-2. Search for "Hermes Conversation"
-3. Enter the **Host**, **Port**, and optionally the **API Key** of your Hermes Agent instance
-4. Click **Submit**
+2. Search for "Hermes Agent"
+3. Enter the **Host**, **Port** (default: 8443), and optionally the **API Key**
+4. **Use HTTPS** is on by default (the add-on uses a self-signed certificate)
+5. **Verify SSL certificate** is off by default (for self-signed certs)
+6. Click **Submit**
 
 ### Using as Voice Assistant
 
 1. Go to **Settings → Voice Assistants**
 2. Create a new assistant or edit an existing one
-3. Select **Hermes Conversation** as the **Conversation agent**
+3. Select **Hermes Agent** as the **Conversation agent**
+4. Disable **Prefer handling commands locally** (Hermes Agent handles everything)
 
 ### Options
 
-After setup, configure the integration via **Settings → Devices & Services → Hermes Conversation → Configure**:
+After setup, configure the integration via **Settings → Devices & Services → Hermes Agent → Configure**:
 
 | Option | Default | Description |
 |--------|---------|-------------|
-| Model | `hermes-agent` | Model name sent to the API |
-| System Prompt | (built-in) | Jinja2 template for the system prompt |
-| Temperature | 0.7 | LLM temperature (0.0–2.0) |
-| Max Tokens | 4096 | Maximum response tokens |
-| Include exposed entities | Yes | Include smart home device states in the prompt |
+| System Prompt | (built-in) | Jinja2 template — leave empty to use Hermes Agent's own prompt |
+| Include exposed entities | Yes | Include smart home device states in the system prompt |
 | Max context characters | 12000 | Character limit for the entity context block |
+
+The default system prompt includes the current date/time, timezone, the user's name, the home name, and exposed device states.
 
 ## How It Works
 
 This integration communicates with Hermes Agent's OpenAI-compatible API (`/v1/chat/completions`) using only Home Assistant's built-in HTTP client — **no external Python dependencies**.
 
-Hermes Agent handles tool execution (controlling lights, checking sensors, etc.) server-side through its own Home Assistant integration. This means the conversation integration stays simple: it sends your message, gets back the response (which may include results from tool actions the agent performed), and displays it.
+Hermes Agent handles tool execution (controlling lights, checking sensors, etc.) server-side through its own Home Assistant tools. This means the conversation integration stays simple: it sends your message, gets back the response (which may include results from tool actions the agent performed), and displays it.
 
 ## License
 
