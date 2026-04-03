@@ -150,6 +150,12 @@ class HermesConversationConfigFlow(ConfigFlow, domain=DOMAIN):
         except Exception:
             return None
 
+    def _abort_if_host_port_configured(self, host: str, port: int) -> None:
+        """Abort if an entry with the same host:port already exists."""
+        for entry in self._async_current_entries():
+            if entry.data.get(CONF_HOST) == host and entry.data.get(CONF_PORT) == port:
+                raise self.async_abort(reason="already_configured")
+
     async def async_step_confirm(
         self, user_input: dict[str, Any] | None = None
     ) -> dict[str, Any]:
@@ -169,6 +175,9 @@ class HermesConversationConfigFlow(ConfigFlow, domain=DOMAIN):
             )
             try:
                 await client.async_check_connection()
+                self._abort_if_host_port_configured(
+                    self._discovered_host, self._discovered_port,
+                )
                 return self.async_create_entry(
                     title="Hermes Conversation",
                     data={
@@ -218,6 +227,7 @@ class HermesConversationConfigFlow(ConfigFlow, domain=DOMAIN):
 
             try:
                 await client.async_check_connection()
+                self._abort_if_host_port_configured(host, port)
                 return self.async_create_entry(
                     title="Hermes Conversation",
                     data={

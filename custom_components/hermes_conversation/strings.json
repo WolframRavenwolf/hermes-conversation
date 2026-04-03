@@ -31,7 +31,9 @@
       "api_not_enabled": "The API server is not enabled in the Hermes Agent add-on. Enable it in the add-on configuration.",
       "unknown": "An unexpected error occurred."
     },
-    "abort": {}
+    "abort": {
+      "already_configured": "This Hermes Agent instance is already configured."
+    }
   },
   "options": {
     "step": {
