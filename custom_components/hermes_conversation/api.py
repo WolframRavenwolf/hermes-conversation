@@ -101,16 +101,11 @@ class HermesApiClient:
     async def async_send_message(
         self,
         messages: list[dict[str, str]],
-        model: str = "hermes-agent",
-        temperature: float = 0.7,
-        max_tokens: int = 4096,
     ) -> str:
         """Send a non-streaming chat completion request. Returns the response content."""
         payload = {
-            "model": model,
+            "model": "hermes-agent",
             "messages": messages,
-            "temperature": temperature,
-            "max_tokens": max_tokens,
             "stream": False,
         }
 
@@ -141,16 +136,11 @@ class HermesApiClient:
     async def async_stream_message(
         self,
         messages: list[dict[str, str]],
-        model: str = "hermes-agent",
-        temperature: float = 0.7,
-        max_tokens: int = 4096,
     ) -> AsyncGenerator[str, None]:
         """Send a streaming chat completion request. Yields content deltas."""
         payload = {
-            "model": model,
+            "model": "hermes-agent",
             "messages": messages,
-            "temperature": temperature,
-            "max_tokens": max_tokens,
             "stream": True,
         }
 

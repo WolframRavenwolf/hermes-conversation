@@ -21,18 +21,11 @@ from .api import HermesApiClient, HermesApiError
 from .const import (
     CONF_CONTEXT_MAX_CHARS,
     CONF_INCLUDE_EXPOSED_ENTITIES,
-    CONF_MAX_TOKENS,
-    CONF_MODEL,
     CONF_PROMPT,
-    CONF_TEMPERATURE,
     DEFAULT_CONTEXT_MAX_CHARS,
     DEFAULT_INCLUDE_EXPOSED_ENTITIES,
-    DEFAULT_MAX_TOKENS,
     DEFAULT_MAX_HISTORY_MESSAGES,
-    DEFAULT_MODEL,
     DEFAULT_PROMPT,
-    DEFAULT_TEMPERATURE,
-    DOMAIN,
 )
 
 _LOGGER = logging.getLogger(__name__)
@@ -64,9 +57,6 @@ class HermesConversationAgent(AbstractConversationAgent):
     ) -> ConversationResult:
         """Process a conversation turn."""
         options = self.entry.options
-        model = options.get(CONF_MODEL, DEFAULT_MODEL)
-        temperature = options.get(CONF_TEMPERATURE, DEFAULT_TEMPERATURE)
-        max_tokens = options.get(CONF_MAX_TOKENS, DEFAULT_MAX_TOKENS)
 
         # Build system prompt
         system_prompt = self._render_system_prompt(options)
@@ -89,9 +79,7 @@ class HermesConversationAgent(AbstractConversationAgent):
 
         # Call the API — try streaming first, fall back to non-streaming
         try:
-            response_text = await self._get_response(
-                messages, model, temperature, max_tokens
-            )
+            response_text = await self._get_response(messages)
         except HermesApiError as err:
             _LOGGER.error("Hermes API error: %s", err)
             intent_response = intent.IntentResponse(language=user_input.language)
@@ -131,17 +119,12 @@ class HermesConversationAgent(AbstractConversationAgent):
     async def _get_response(
         self,
         messages: list[dict[str, str]],
-        model: str,
-        temperature: float,
-        max_tokens: int,
     ) -> str:
         """Get a response from the API, trying streaming first."""
         # Try streaming for lower TTFB
         try:
             chunks: list[str] = []
-            async for delta in self.client.async_stream_message(
-                messages, model, temperature, max_tokens
-            ):
+            async for delta in self.client.async_stream_message(messages):
                 chunks.append(delta)
 
             if chunks:
@@ -150,9 +133,7 @@ class HermesConversationAgent(AbstractConversationAgent):
             _LOGGER.debug("Streaming failed, falling back to non-streaming")
 
         # Fall back to non-streaming
-        return await self.client.async_send_message(
-            messages, model, temperature, max_tokens
-        )
+        return await self.client.async_send_message(messages)
 
     def _render_system_prompt(self, options: dict[str, Any]) -> str:
         """Render the system prompt template with HA context."""

@@ -39,10 +39,7 @@
     "step": {
       "init": {
         "data": {
-          "model": "Model",
           "prompt": "System Prompt",
-          "temperature": "Temperature",
-          "max_tokens": "Max Tokens",
           "include_exposed_entities": "Include exposed entities in prompt",
           "context_max_chars": "Max context characters"
         }

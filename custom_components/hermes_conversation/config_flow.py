@@ -16,6 +16,7 @@ from homeassistant.config_entries import (
 from homeassistant.core import callback
 from homeassistant.data_entry_flow import AbortFlow
 from homeassistant.helpers.aiohttp_client import async_get_clientsession
+from homeassistant.helpers.selector import TextSelector, TextSelectorConfig
 
 from .api import HermesApiClient, HermesAuthError, HermesConnectionError
 from .const import (
@@ -27,18 +28,12 @@ from .const import (
     CONF_USE_SSL,
     CONF_VERIFY_SSL,
     CONF_INCLUDE_EXPOSED_ENTITIES,
-    CONF_MAX_TOKENS,
-    CONF_MODEL,
     CONF_PORT,
     CONF_PROMPT,
-    CONF_TEMPERATURE,
     DEFAULT_CONTEXT_MAX_CHARS,
     DEFAULT_INCLUDE_EXPOSED_ENTITIES,
-    DEFAULT_MAX_TOKENS,
-    DEFAULT_MODEL,
     DEFAULT_PORT,
     DEFAULT_PROMPT,
-    DEFAULT_TEMPERATURE,
     DOMAIN,
 )
 
@@ -356,21 +351,9 @@ class HermesConversationOptionsFlow(OptionsFlow):
             data_schema=vol.Schema(
                 {
                     vol.Optional(
-                        CONF_MODEL,
-                        default=options.get(CONF_MODEL, DEFAULT_MODEL),
-                    ): str,
-                    vol.Optional(
                         CONF_PROMPT,
                         default=options.get(CONF_PROMPT, DEFAULT_PROMPT),
-                    ): str,
-                    vol.Optional(
-                        CONF_TEMPERATURE,
-                        default=options.get(CONF_TEMPERATURE, DEFAULT_TEMPERATURE),
-                    ): vol.All(vol.Coerce(float), vol.Range(min=0.0, max=2.0)),
-                    vol.Optional(
-                        CONF_MAX_TOKENS,
-                        default=options.get(CONF_MAX_TOKENS, DEFAULT_MAX_TOKENS),
-                    ): vol.All(vol.Coerce(int), vol.Range(min=1, max=128000)),
+                    ): TextSelector(TextSelectorConfig(multiline=True)),
                     vol.Optional(
                         CONF_INCLUDE_EXPOSED_ENTITIES,
                         default=options.get(
