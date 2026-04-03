@@ -42,7 +42,7 @@ DEFAULT_STREAM_TIMEOUT = 300
 DEFAULT_MAX_HISTORY_MESSAGES = 100
 
 DEFAULT_PROMPT = (
-    "You are in a voice chat with {{ user_name }} via the Home Assistant app.\n"
+    "You are in a voice chat with the user via the Home Assistant app.\n"
     "The current time is {{ now().strftime('%H:%M') }}.\n"
     "Today's date is {{ now().strftime('%Y-%m-%d') }}.\n"
     "{% if ha_name %}The home is called {{ ha_name }}.{% endif %}\n"
