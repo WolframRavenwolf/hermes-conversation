@@ -1,0 +1,47 @@
+{
+  "config": {
+    "step": {
+      "user": {
+        "title": "Hermes Conversation",
+        "description": "Set up the Hermes Conversation agent."
+      },
+      "confirm": {
+        "title": "Hermes Agent Discovered",
+        "description": "Found Hermes Agent add-on at {host}:{port}.\n\nPress Submit to connect."
+      },
+      "manual": {
+        "title": "Manual Configuration",
+        "description": "Enter the connection details for your Hermes Agent instance.",
+        "data": {
+          "host": "Host",
+          "port": "Port",
+          "api_key": "API Key (optional)",
+          "use_ssl": "Use HTTPS"
+        }
+      }
+    },
+    "error": {
+      "cannot_connect": "Cannot connect to Hermes Agent. Check host and port.",
+      "invalid_auth": "Invalid API key.",
+      "api_not_enabled": "The API server is not enabled in the Hermes Agent add-on. Enable it in the add-on configuration.",
+      "unknown": "An unexpected error occurred."
+    },
+    "abort": {
+      "already_configured": "Hermes Conversation is already configured."
+    }
+  },
+  "options": {
+    "step": {
+      "init": {
+        "data": {
+          "model": "Model",
+          "prompt": "System Prompt",
+          "temperature": "Temperature",
+          "max_tokens": "Max Tokens",
+          "include_exposed_entities": "Include exposed entities in prompt",
+          "context_max_chars": "Max context characters"
+        }
+      }
+    }
+  }
+}
