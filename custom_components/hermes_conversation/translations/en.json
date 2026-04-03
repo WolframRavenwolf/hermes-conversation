@@ -3,18 +3,6 @@
     "step": {
       "user": {
         "title": "Hermes Agent",
-        "description": "Hermes Agent add-on detected. Choose how to connect.",
-        "menu_options": {
-          "confirm": "Use discovered add-on",
-          "manual": "Configure manually"
-        }
-      },
-      "confirm": {
-        "title": "Hermes Agent Discovered",
-        "description": "Found Hermes Agent add-on at {host}:{port}.\n\nPress Submit to connect."
-      },
-      "manual": {
-        "title": "Manual Configuration",
         "description": "Enter the connection details for your Hermes Agent instance.",
         "data": {
           "host": "Host",
@@ -28,7 +16,6 @@
     "error": {
       "cannot_connect": "Cannot connect to Hermes Agent. Check host and port.",
       "invalid_auth": "Invalid API key.",
-      "api_not_enabled": "The API server is not enabled in the Hermes Agent add-on. Enable it in the add-on configuration.",
       "unknown": "An unexpected error occurred."
     },
     "abort": {

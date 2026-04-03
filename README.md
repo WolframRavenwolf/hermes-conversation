@@ -9,7 +9,6 @@ A [Home Assistant](https://home-assistant.io/) custom integration that connects 
 
 - **Conversation agent** — use Hermes Agent as your voice assistant in Home Assistant
 - **Streaming** — low latency for voice pipelines (first token arrives fast)
-- **Auto-discovery** — automatically detects the [Hermes Agent add-on](https://github.com/WolframRavenwolf/hermes-ha-addon) when running
 - **Entity exposure** — includes your smart home device states in the system prompt
 - **Multi-turn** — maintains conversation history across turns
 - **Username resolution** — greets the user by name (from HA auth)
@@ -40,22 +39,15 @@ A [Home Assistant](https://home-assistant.io/) custom integration that connects 
 
 ## Configuration
 
-### With the Hermes Agent Add-on (Auto-Discovery)
+### Setup
 
 1. Make sure the Hermes Agent add-on is running with **Enable API** turned on
 2. Go to **Settings → Devices & Services → Add Integration**
 3. Search for "Hermes Agent"
-4. If the add-on is detected, choose **Use discovered add-on** or **Configure manually**
-5. Click **Submit** to confirm
-
-### Manual Setup (Standalone Hermes Agent)
-
-1. Go to **Settings → Devices & Services → Add Integration**
-2. Search for "Hermes Agent"
-3. Enter the **Host**, **Port** (default: 8443), and optionally the **API Key**
-4. **Use HTTPS** is on by default (the add-on uses a self-signed certificate)
-5. **Verify SSL certificate** is off by default (for self-signed certs)
-6. Click **Submit**
+4. Enter the **Host**, **Port** (default: 8443), and optionally the **API Key**
+5. **Use HTTPS** is on by default (the add-on uses a self-signed certificate)
+6. **Verify SSL certificate** is off by default (for self-signed certs)
+7. Click **Submit**
 
 ### Using as Voice Assistant
 
