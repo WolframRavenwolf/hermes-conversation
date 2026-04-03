@@ -14,6 +14,7 @@ from homeassistant.config_entries import (
     OptionsFlow,
 )
 from homeassistant.core import callback
+from homeassistant.data_entry_flow import AbortFlow
 from homeassistant.helpers.aiohttp_client import async_get_clientsession
 
 from .api import HermesApiClient, HermesAuthError, HermesConnectionError
@@ -154,7 +155,7 @@ class HermesConversationConfigFlow(ConfigFlow, domain=DOMAIN):
         """Abort if an entry with the same host:port already exists."""
         for entry in self._async_current_entries():
             if entry.data.get(CONF_HOST) == host and entry.data.get(CONF_PORT) == port:
-                raise self.async_abort(reason="already_configured")
+                raise AbortFlow("already_configured")
 
     async def async_step_confirm(
         self, user_input: dict[str, Any] | None = None
