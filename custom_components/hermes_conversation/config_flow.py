@@ -66,17 +66,16 @@ class HermesConversationConfigFlow(ConfigFlow, domain=DOMAIN):
     async def async_step_user(
         self, user_input: dict[str, Any] | None = None
     ) -> dict[str, Any]:
-        """Handle the initial step — attempt addon auto-discovery."""
-        # Only allow one instance
-        await self.async_set_unique_id(DOMAIN)
-        self._abort_if_unique_id_configured()
-
-        # Try auto-discovery via Supervisor
+        """Handle the initial step — offer menu if addon is discovered."""
+        # Try auto-discovery
         discovered = await self._async_discover_addon()
         if discovered:
-            return await self.async_step_confirm()
+            return self.async_show_menu(
+                step_id="user",
+                menu_options=["confirm", "manual"],
+            )
 
-        # Fall back to manual
+        # No addon found — go straight to manual
         return await self.async_step_manual(user_input)
 
     async def _async_discover_addon(self) -> bool:
