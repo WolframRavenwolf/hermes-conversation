@@ -20,10 +20,7 @@ CONF_VERIFY_SSL = "verify_ssl"
 # ---------------------------------------------------------------------------
 # Options keys (user-changeable after setup)
 # ---------------------------------------------------------------------------
-CONF_MODEL = "model"
 CONF_PROMPT = "prompt"
-CONF_TEMPERATURE = "temperature"
-CONF_MAX_TOKENS = "max_tokens"
 CONF_INCLUDE_EXPOSED_ENTITIES = "include_exposed_entities"
 CONF_CONTEXT_MAX_CHARS = "context_max_chars"
 
@@ -32,9 +29,6 @@ CONF_CONTEXT_MAX_CHARS = "context_max_chars"
 # ---------------------------------------------------------------------------
 DEFAULT_HOST = "homeassistant.local"
 DEFAULT_PORT = 8443
-DEFAULT_MODEL = "hermes-agent"
-DEFAULT_TEMPERATURE = 0.7
-DEFAULT_MAX_TOKENS = 4096
 DEFAULT_CONTEXT_MAX_CHARS = 12000
 DEFAULT_INCLUDE_EXPOSED_ENTITIES = True
 DEFAULT_TIMEOUT = 120
