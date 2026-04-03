@@ -6,7 +6,12 @@ import logging
 from collections import OrderedDict
 from typing import Any
 
-from homeassistant.components import conversation
+from homeassistant.components.conversation import (
+    AbstractConversationAgent,
+    ConversationInput,
+    ConversationResult,
+    MATCH_ALL,
+)
 from homeassistant.components.homeassistant.exposed_entities import async_should_expose
 from homeassistant.config_entries import ConfigEntry
 from homeassistant.core import HomeAssistant
@@ -33,7 +38,7 @@ from .const import (
 _LOGGER = logging.getLogger(__name__)
 
 
-class HermesConversationAgent(conversation.AbstractConversationAgent):
+class HermesConversationAgent(AbstractConversationAgent):
     """Hermes Agent conversation agent for Home Assistant."""
 
     def __init__(
@@ -52,11 +57,11 @@ class HermesConversationAgent(conversation.AbstractConversationAgent):
     @property
     def supported_languages(self) -> list[str] | str:
         """Return supported languages (all — the LLM handles it)."""
-        return conversation.MATCH_ALL
+        return MATCH_ALL
 
     async def async_process(
-        self, user_input: conversation.ConversationInput
-    ) -> conversation.ConversationResult:
+        self, user_input: ConversationInput
+    ) -> ConversationResult:
         """Process a conversation turn."""
         options = self.entry.options
         model = options.get(CONF_MODEL, DEFAULT_MODEL)
@@ -94,7 +99,7 @@ class HermesConversationAgent(conversation.AbstractConversationAgent):
                 intent.IntentResponseErrorCode.UNKNOWN,
                 f"Error communicating with Hermes Agent: {err}",
             )
-            return conversation.ConversationResult(
+            return ConversationResult(
                 response=intent_response,
                 conversation_id=conv_id,
             )

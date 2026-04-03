@@ -4,7 +4,10 @@ from __future__ import annotations
 
 import logging
 
-from homeassistant.components import conversation
+from homeassistant.components.conversation import (
+    async_set_agent,
+    async_unset_agent,
+)
 from homeassistant.config_entries import ConfigEntry
 from homeassistant.core import HomeAssistant
 from homeassistant.helpers.aiohttp_client import async_get_clientsession
@@ -37,7 +40,7 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
         "agent": agent,
     }
 
-    conversation.async_set_agent(hass, entry, agent)
+    async_set_agent(hass, entry, agent)
 
     entry.async_on_unload(entry.add_update_listener(_async_update_listener))
 
@@ -47,7 +50,7 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
 
 async def async_unload_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
     """Unload a config entry."""
-    conversation.async_unset_agent(hass, entry)
+    async_unset_agent(hass, entry)
     hass.data[DOMAIN].pop(entry.entry_id, None)
     if not hass.data[DOMAIN]:
         hass.data.pop(DOMAIN, None)
