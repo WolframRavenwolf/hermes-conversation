@@ -25,6 +25,7 @@ from .const import (
     DEFAULT_CONTEXT_MAX_CHARS,
     DEFAULT_INCLUDE_EXPOSED_ENTITIES,
     DEFAULT_MAX_HISTORY_MESSAGES,
+    DEFAULT_PROMPT,
 )
 
 _LOGGER = logging.getLogger(__name__)
@@ -57,8 +58,11 @@ class HermesConversationAgent(AbstractConversationAgent):
         """Process a conversation turn."""
         options = self.entry.options
 
+        # Resolve username from HA auth
+        user_name = await self._get_user_name(user_input)
+
         # Build system prompt (optional — Hermes Agent has its own)
-        system_prompt = self._render_system_prompt(options)
+        system_prompt = self._render_system_prompt(options, user_name)
 
         # Append extra system prompt from HA voice pipeline if present
         extra = getattr(user_input, "extra_system_prompt", None)
@@ -134,15 +138,28 @@ class HermesConversationAgent(AbstractConversationAgent):
         # Fall back to non-streaming
         return await self.client.async_send_message(messages)
 
-    def _render_system_prompt(self, options: dict[str, Any]) -> str:
+    async def _get_user_name(self, user_input: ConversationInput) -> str:
+        """Resolve the display name of the user from HA auth."""
+        try:
+            context = user_input.context
+            if context and context.user_id:
+                user = await self.hass.auth.async_get_user(context.user_id)
+                if user and user.name:
+                    return user.name
+        except Exception:
+            pass
+        return "the user"
+
+    def _render_system_prompt(self, options: dict[str, Any], user_name: str) -> str:
         """Render the system prompt template with HA context."""
-        prompt_template = options.get(CONF_PROMPT, "")
+        prompt_template = options.get(CONF_PROMPT, DEFAULT_PROMPT)
         if not prompt_template:
             return ""
 
         # Build template variables
         variables: dict[str, Any] = {
             "ha_name": self.hass.config.location_name,
+            "user_name": user_name,
         }
 
         # Include exposed entities if enabled

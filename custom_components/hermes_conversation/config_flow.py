@@ -33,6 +33,7 @@ from .const import (
     DEFAULT_CONTEXT_MAX_CHARS,
     DEFAULT_INCLUDE_EXPOSED_ENTITIES,
     DEFAULT_PORT,
+    DEFAULT_PROMPT,
     DOMAIN,
 )
 
@@ -351,7 +352,7 @@ class HermesConversationOptionsFlow(OptionsFlow):
                 {
                     vol.Optional(
                         CONF_PROMPT,
-                        default=options.get(CONF_PROMPT, ""),
+                        default=options.get(CONF_PROMPT, DEFAULT_PROMPT),
                     ): TextSelector(TextSelectorConfig(multiline=True)),
                     vol.Optional(
                         CONF_INCLUDE_EXPOSED_ENTITIES,
