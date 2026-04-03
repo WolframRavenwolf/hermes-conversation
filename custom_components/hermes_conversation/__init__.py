@@ -10,7 +10,7 @@ from homeassistant.core import HomeAssistant
 from homeassistant.helpers.aiohttp_client import async_get_clientsession
 
 from .api import HermesApiClient
-from .const import CONF_API_KEY, CONF_HOST, CONF_PORT, CONF_USE_SSL, DOMAIN
+from .const import CONF_API_KEY, CONF_HOST, CONF_PORT, CONF_USE_SSL, CONF_VERIFY_SSL, DOMAIN
 from .conversation import HermesConversationAgent
 
 _LOGGER = logging.getLogger(__name__)
@@ -25,7 +25,8 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
         host=entry.data[CONF_HOST],
         port=entry.data[CONF_PORT],
         api_key=entry.data.get(CONF_API_KEY) or None,
-        use_ssl=entry.data.get(CONF_USE_SSL, False),
+        use_ssl=entry.data.get(CONF_USE_SSL, True),
+        verify_ssl=entry.data.get(CONF_VERIFY_SSL, False),
     )
 
     agent = HermesConversationAgent(hass, entry, client)

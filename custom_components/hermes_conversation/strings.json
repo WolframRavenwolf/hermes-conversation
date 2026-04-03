@@ -16,7 +16,8 @@
           "host": "Host",
           "port": "Port",
           "api_key": "API Key (optional)",
-          "use_ssl": "Use HTTPS"
+          "use_ssl": "Use HTTPS",
+          "verify_ssl": "Verify SSL certificate"
         }
       }
     },

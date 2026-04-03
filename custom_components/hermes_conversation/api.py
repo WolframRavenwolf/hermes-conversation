@@ -41,12 +41,15 @@ class HermesApiClient:
         host: str,
         port: int,
         api_key: str | None = None,
-        use_ssl: bool = False,
+        use_ssl: bool = True,
+        verify_ssl: bool = False,
     ) -> None:
         self._session = session
         scheme = "https" if use_ssl else "http"
         self._base_url = f"{scheme}://{host}:{port}"
         self._api_key = api_key
+        # ssl=False disables certificate verification (for self-signed certs)
+        self._ssl: bool | None = None if not use_ssl else (None if verify_ssl else False)
 
     @property
     def base_url(self) -> str:
@@ -65,6 +68,7 @@ class HermesApiClient:
                 f"{self._base_url}{API_HEALTH}",
                 headers=self._headers(),
                 timeout=aiohttp.ClientTimeout(total=10),
+                ssl=self._ssl,
             ) as resp:
                 if resp.status == 401:
                     raise HermesAuthError("Invalid API key")
@@ -85,6 +89,7 @@ class HermesApiClient:
                 f"{self._base_url}{API_MODELS}",
                 headers=self._headers(),
                 timeout=aiohttp.ClientTimeout(total=10),
+                ssl=self._ssl,
             ) as resp:
                 if resp.status != 200:
                     return []
@@ -115,6 +120,7 @@ class HermesApiClient:
                 headers=self._headers(),
                 json=payload,
                 timeout=aiohttp.ClientTimeout(total=DEFAULT_TIMEOUT),
+                ssl=self._ssl,
             ) as resp:
                 if resp.status == 401:
                     raise HermesAuthError("Invalid API key")
@@ -157,6 +163,7 @@ class HermesApiClient:
                     total=DEFAULT_STREAM_TIMEOUT,
                     sock_read=DEFAULT_TIMEOUT,
                 ),
+                ssl=self._ssl,
             ) as resp:
                 if resp.status == 401:
                     raise HermesAuthError("Invalid API key")

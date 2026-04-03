@@ -15,6 +15,7 @@ CONF_HOST = "host"
 CONF_PORT = "port"
 CONF_API_KEY = "api_key"
 CONF_USE_SSL = "use_ssl"
+CONF_VERIFY_SSL = "verify_ssl"
 
 # ---------------------------------------------------------------------------
 # Options keys (user-changeable after setup)
@@ -30,7 +31,7 @@ CONF_CONTEXT_MAX_CHARS = "context_max_chars"
 # Defaults
 # ---------------------------------------------------------------------------
 DEFAULT_HOST = "homeassistant.local"
-DEFAULT_PORT = 8080
+DEFAULT_PORT = 8443
 DEFAULT_MODEL = "hermes-agent"
 DEFAULT_TEMPERATURE = 0.7
 DEFAULT_MAX_TOKENS = 4096

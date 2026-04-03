@@ -23,6 +23,7 @@ from .const import (
     CONF_CONTEXT_MAX_CHARS,
     CONF_HOST,
     CONF_USE_SSL,
+    CONF_VERIFY_SSL,
     CONF_INCLUDE_EXPOSED_ENTITIES,
     CONF_MAX_TOKENS,
     CONF_MODEL,
@@ -185,6 +186,7 @@ class HermesConversationConfigFlow(ConfigFlow, domain=DOMAIN):
                         CONF_PORT: self._discovered_port,
                         CONF_API_KEY: self._discovered_api_key or "",
                         CONF_USE_SSL: False,
+                        CONF_VERIFY_SSL: False,
                     },
                 )
             except HermesAuthError:
@@ -215,10 +217,14 @@ class HermesConversationConfigFlow(ConfigFlow, domain=DOMAIN):
             port = user_input[CONF_PORT]
             api_key = user_input.get(CONF_API_KEY, "") or None
 
-            use_ssl = user_input.get(CONF_USE_SSL, False)
+            use_ssl = user_input.get(CONF_USE_SSL, True)
+            verify_ssl = user_input.get(CONF_VERIFY_SSL, False)
 
             session = async_get_clientsession(self.hass)
-            client = HermesApiClient(session, host, port, api_key, use_ssl=use_ssl)
+            client = HermesApiClient(
+                session, host, port, api_key,
+                use_ssl=use_ssl, verify_ssl=verify_ssl,
+            )
 
             try:
                 await client.async_check_connection()
@@ -229,6 +235,7 @@ class HermesConversationConfigFlow(ConfigFlow, domain=DOMAIN):
                         CONF_PORT: port,
                         CONF_API_KEY: api_key or "",
                         CONF_USE_SSL: use_ssl,
+                        CONF_VERIFY_SSL: verify_ssl,
                     },
                 )
             except HermesAuthError:
@@ -246,7 +253,8 @@ class HermesConversationConfigFlow(ConfigFlow, domain=DOMAIN):
                     vol.Required(CONF_HOST, default="homeassistant.local"): str,
                     vol.Required(CONF_PORT, default=DEFAULT_PORT): int,
                     vol.Optional(CONF_API_KEY, default=""): str,
-                    vol.Optional(CONF_USE_SSL, default=False): bool,
+                    vol.Optional(CONF_USE_SSL, default=True): bool,
+                    vol.Optional(CONF_VERIFY_SSL, default=False): bool,
                 }
             ),
             errors=errors,
