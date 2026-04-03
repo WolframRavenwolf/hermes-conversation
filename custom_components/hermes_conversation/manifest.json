@@ -1,6 +1,6 @@
 {
   "domain": "hermes_conversation",
-  "name": "Hermes Conversation",
+  "name": "Hermes Agent",
   "codeowners": ["@WolframRavenwolf"],
   "config_flow": true,
   "dependencies": ["conversation"],

@@ -141,13 +141,17 @@ class HermesConversationAgent(AbstractConversationAgent):
     async def _get_user_name(self, user_input: ConversationInput) -> str:
         """Resolve the display name of the user from HA auth."""
         try:
-            context = user_input.context
-            if context and context.user_id:
-                user = await self.hass.auth.async_get_user(context.user_id)
-                if user and user.name:
-                    return user.name
+            context = getattr(user_input, "context", None)
+            if context is None:
+                return "the user"
+            user_id = getattr(context, "user_id", None)
+            if not user_id:
+                return "the user"
+            user = await self.hass.auth.async_get_user(user_id)
+            if user and user.name:
+                return user.name
         except Exception:
-            pass
+            _LOGGER.debug("Could not resolve username", exc_info=True)
         return "the user"
 
     def _render_system_prompt(self, options: dict[str, Any], user_name: str) -> str:

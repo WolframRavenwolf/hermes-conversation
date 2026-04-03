@@ -2,7 +2,7 @@
   "config": {
     "step": {
       "user": {
-        "title": "Hermes Conversation",
+        "title": "Hermes Agent",
         "description": "Hermes Agent add-on detected. Choose how to connect.",
         "menu_options": {
           "confirm": "Use discovered add-on",
