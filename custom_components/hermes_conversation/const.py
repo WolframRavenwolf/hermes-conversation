@@ -43,7 +43,7 @@ DEFAULT_MAX_HISTORY_MESSAGES = 100
 
 DEFAULT_PROMPT = (
     "You are in a voice chat with {{ user_name }} via the Home Assistant app.\n"
-    "Today is {{ now().strftime('%Y-%m-%d') }}, {{ now().strftime('%H:%M %Z') }}.\n"
+    "Current date and time: {{ now().strftime('%Y-%m-%d %H:%M %Z') }}.\n"
     "{% if ha_name %}The home is called {{ ha_name }}.{% endif %}\n"
     "{% if exposed_entities %}\n"
     "Available devices:\n"
