@@ -123,7 +123,7 @@ class HermesConversationAgent(AbstractConversationAgent):
         intent_response = intent.IntentResponse(language=user_input.language)
         intent_response.async_set_speech(response_text)
 
-        return conversation.ConversationResult(
+        return ConversationResult(
             response=intent_response,
             conversation_id=conv_id,
         )
