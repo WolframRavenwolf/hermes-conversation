@@ -76,8 +76,11 @@ class HermesConversationAgent(AbstractConversationAgent):
         """Inner processing — wrapped by async_process for error logging."""
         options = self.entry.options
 
+        # Resolve username from HA auth
+        user_name = await self._get_user_name(user_input)
+
         # Build system prompt (optional — Hermes Agent has its own)
-        system_prompt = self._render_system_prompt(options)
+        system_prompt = self._render_system_prompt(options, user_name)
 
         # Append extra system prompt from HA voice pipeline if present
         extra = getattr(user_input, "extra_system_prompt", None)
@@ -153,7 +156,23 @@ class HermesConversationAgent(AbstractConversationAgent):
         # Fall back to non-streaming
         return await self.client.async_send_message(messages)
 
-    def _render_system_prompt(self, options: dict[str, Any]) -> str:
+    async def _get_user_name(self, user_input: ConversationInput) -> str:
+        """Resolve the display name of the user from HA auth."""
+        try:
+            context = getattr(user_input, "context", None)
+            if context is None:
+                return "the user"
+            user_id = getattr(context, "user_id", None)
+            if not user_id:
+                return "the user"
+            user = await self.hass.auth.async_get_user(user_id)
+            if user and user.name:
+                return user.name
+        except Exception:
+            _LOGGER.debug("Could not resolve username", exc_info=True)
+        return "the user"
+
+    def _render_system_prompt(self, options: dict[str, Any], user_name: str) -> str:
         """Render the system prompt template with HA context."""
         prompt_template = options.get(CONF_PROMPT, DEFAULT_PROMPT)
         if not prompt_template:
@@ -162,6 +181,7 @@ class HermesConversationAgent(AbstractConversationAgent):
         # Build template variables
         variables: dict[str, Any] = {
             "ha_name": self.hass.config.location_name,
+            "user_name": user_name,
         }
 
         # Include exposed entities if enabled
