@@ -12,7 +12,7 @@ A [Home Assistant](https://home-assistant.io/) custom integration that connects 
 - **Entity exposure** — includes your smart home device states in the system prompt
 - **Multi-turn** — maintains conversation history across turns
 - **Username resolution** — passes the user's name to the agent
-- **Configurable** — system prompt (Jinja2), entity exposure, context limit
+- **Configurable** — connection settings and prompt options can be changed anytime via Configure
 - **Multiple instances** — connect to both the local add-on and an external Hermes Agent
 
 ## Requirements
@@ -58,10 +58,15 @@ A [Home Assistant](https://home-assistant.io/) custom integration that connects 
 
 ### Options
 
-After setup, configure the integration via **Settings → Devices & Services → Hermes Agent → Configure**:
+After setup, all settings can be changed via **Settings → Devices & Services → Hermes Agent → Configure**:
 
 | Option | Default | Description |
 |--------|---------|-------------|
+| Host | homeassistant.local | Hermes Agent hostname or IP |
+| Port | 8443 | API port |
+| API Key | (empty) | API key if configured in the add-on |
+| Use HTTPS | Yes | Connect via HTTPS |
+| Verify SSL certificate | No | Verify the SSL certificate (disable for self-signed) |
 | System Prompt | (built-in) | Jinja2 template — leave empty to use Hermes Agent's own prompt |
 | Include exposed entities | No | Include smart home device states in the system prompt |
 | Max context characters | 12000 | Character limit for the entity context block |
