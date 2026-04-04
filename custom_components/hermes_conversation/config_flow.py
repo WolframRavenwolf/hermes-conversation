@@ -119,14 +119,50 @@ class HermesConversationOptionsFlow(OptionsFlow):
     ) -> dict[str, Any]:
         """Manage the options."""
         if user_input is not None:
-            return self.async_create_entry(title="", data=user_input)
+            # Split: connection settings go into data, the rest into options
+            new_data = {}
+            new_options = {}
+            for key, value in user_input.items():
+                if key in (CONF_HOST, CONF_PORT, CONF_API_KEY, CONF_USE_SSL, CONF_VERIFY_SSL):
+                    new_data[key] = value
+                else:
+                    new_options[key] = value
 
+            # Update config entry data if connection settings changed
+            if new_data:
+                self.hass.config_entries.async_update_entry(
+                    self.config_entry, data={**self.config_entry.data, **new_data}
+                )
+
+            return self.async_create_entry(title="", data=new_options)
+
+        data = self.config_entry.data
         options = self.config_entry.options
 
         return self.async_show_form(
             step_id="init",
             data_schema=vol.Schema(
                 {
+                    vol.Required(
+                        CONF_HOST,
+                        default=data.get(CONF_HOST, "homeassistant.local"),
+                    ): str,
+                    vol.Required(
+                        CONF_PORT,
+                        default=data.get(CONF_PORT, DEFAULT_PORT),
+                    ): int,
+                    vol.Optional(
+                        CONF_API_KEY,
+                        default=data.get(CONF_API_KEY, ""),
+                    ): str,
+                    vol.Optional(
+                        CONF_USE_SSL,
+                        default=data.get(CONF_USE_SSL, True),
+                    ): bool,
+                    vol.Optional(
+                        CONF_VERIFY_SSL,
+                        default=data.get(CONF_VERIFY_SSL, False),
+                    ): bool,
                     vol.Optional(
                         CONF_PROMPT,
                         default=options.get(CONF_PROMPT, DEFAULT_PROMPT),
