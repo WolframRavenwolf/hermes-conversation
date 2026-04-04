@@ -156,7 +156,9 @@ class HermesConversationOptionsFlow(OptionsFlow):
                     vol.Optional(
                         CONF_API_KEY,
                         default=data.get(CONF_API_KEY, ""),
-                    ): str,
+                    ): TextSelector(
+                        TextSelectorConfig(type="password")
+                    ),
                     vol.Optional(
                         CONF_USE_SSL,
                         default=data.get(CONF_USE_SSL, True),
