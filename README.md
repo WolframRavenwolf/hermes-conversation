@@ -44,7 +44,7 @@ A [Home Assistant](https://home-assistant.io/) custom integration that connects 
 1. Make sure the Hermes Agent add-on is running with **Enable API** turned on
 2. Go to **Settings → Devices & Services → Add Integration**
 3. Search for "Hermes Agent"
-4. Enter the **Host**, **Port** (default: 8443), and optionally the **API Key**
+4. Enter the **Host**, **Port** (default: 8443), and the **API Key** (if configured in the add-on)
 5. **Use HTTPS** is on by default (the add-on uses a self-signed certificate)
 6. **Verify SSL certificate** is off by default (for self-signed certs)
 7. Click **Submit**

@@ -7,7 +7,7 @@
         "data": {
           "host": "Host",
           "port": "Port",
-          "api_key": "API Key (optional)",
+          "api_key": "API Key",
           "use_ssl": "Use HTTPS",
           "verify_ssl": "Verify SSL certificate"
         }
