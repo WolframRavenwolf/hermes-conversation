@@ -102,7 +102,9 @@ class HermesConversationConfigFlow(ConfigFlow, domain=DOMAIN):
                 {
                     vol.Required(CONF_HOST, default="homeassistant.local"): str,
                     vol.Required(CONF_PORT, default=DEFAULT_PORT): int,
-                    vol.Optional(CONF_API_KEY, default=""): str,
+                    vol.Optional(CONF_API_KEY, default=""): TextSelector(
+                        TextSelectorConfig(type="password")
+                    ),
                     vol.Optional(CONF_USE_SSL, default=True): bool,
                     vol.Optional(CONF_VERIFY_SSL, default=False): bool,
                 }
