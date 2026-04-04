@@ -4,10 +4,10 @@
   "codeowners": ["@WolframRavenwolf"],
   "config_flow": true,
   "dependencies": ["conversation"],
-  "documentation": "https://github.com/WolframRavenwolf/hermes-conversation",
+  "documentation": "https://github.com/WolframRavenwolf/hermes-ha-integration",
   "integration_type": "service",
   "iot_class": "local_push",
-  "issue_tracker": "https://github.com/WolframRavenwolf/hermes-conversation/issues",
+  "issue_tracker": "https://github.com/WolframRavenwolf/hermes-ha-integration/issues",
   "requirements": [],
   "version": "1.0.0"
 }

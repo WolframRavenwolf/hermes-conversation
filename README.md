@@ -28,7 +28,7 @@ A [Home Assistant](https://home-assistant.io/) custom integration that connects 
 
 1. Open HACS in Home Assistant
 2. Click the three dots in the top right → **Custom repositories**
-3. Add `https://github.com/WolframRavenwolf/hermes-conversation` as an **Integration**
+3. Add `https://github.com/WolframRavenwolf/hermes-ha-integration` as an **Integration**
 4. Search for "Hermes Agent" and install it
 5. Restart Home Assistant
 
@@ -44,7 +44,7 @@ A [Home Assistant](https://home-assistant.io/) custom integration that connects 
 1. Make sure the Hermes Agent add-on is running with **Enable API** turned on
 2. Go to **Settings → Devices & Services → Add Integration**
 3. Search for "Hermes Agent"
-4. Enter the **Host**, **Port** (default: 8443), and the **API Key** (if configured in the add-on)
+4. Enter the **Host**, **Port** (default: 8443), and the **API Key** (the Access Password from the add-on configuration)
 5. **Use HTTPS** is on by default (the add-on uses a self-signed certificate)
 6. **Verify SSL certificate** is off by default (for self-signed certs)
 7. Click **Submit**
@@ -60,16 +60,16 @@ A [Home Assistant](https://home-assistant.io/) custom integration that connects 
 
 After setup, all settings can be changed via **Settings → Devices & Services → Hermes Agent → Configure**:
 
-| Option | Default | Description |
-|--------|---------|-------------|
-| Host | homeassistant.local | Hermes Agent hostname or IP |
-| Port | 8443 | API port |
-| API Key | (empty) | API key if configured in the add-on |
-| Use HTTPS | Yes | Connect via HTTPS |
-| Verify SSL certificate | No | Verify the SSL certificate (disable for self-signed) |
-| System Prompt | (built-in) | Jinja2 template — leave empty to use Hermes Agent's own prompt |
-| Include exposed entities | No | Include smart home device states in the system prompt |
-| Max context characters | 12000 | Character limit for the entity context block |
+| Option                   | Default             | Description                                                    |
+| ------------------------ | ------------------- | -------------------------------------------------------------- |
+| Host                     | homeassistant.local | Hermes Agent hostname or IP                                    |
+| Port                     | 8443                | API port                                                       |
+| API Key                  | (empty)             | API key (the Access Password from the add-on configuration)    |
+| Use HTTPS                | Yes                 | Connect via HTTPS                                              |
+| Verify SSL certificate   | No                  | Verify the SSL certificate (disable for self-signed)           |
+| System Prompt            | (built-in)          | Jinja2 template — leave empty to use Hermes Agent's own prompt |
+| Include exposed entities | No                  | Include smart home device states in the system prompt          |
+| Max context characters   | 12000               | Character limit for the entity context block                   |
 
 The default system prompt includes the current date/time, timezone, the user's name, the home name, and exposed device states (if enabled). Entity exposure is off by default since Hermes Agent can access Home Assistant entities directly when a Home Assistant token is configured in the Hermes Agent add-on.
 
