@@ -26,6 +26,11 @@
     "step": {
       "init": {
         "data": {
+          "host": "Host",
+          "port": "Port",
+          "api_key": "API Key",
+          "use_ssl": "Use HTTPS",
+          "verify_ssl": "Verify SSL certificate",
           "prompt": "System Prompt",
           "include_exposed_entities": "Include exposed entities in prompt",
           "context_max_chars": "Max context characters"
