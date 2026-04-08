@@ -19,9 +19,11 @@ from homeassistant.helpers import intent, template
 
 from .api import HermesApiClient, HermesApiError
 from .const import (
+    CONF_AUTO_FOLLOW_UP,
     CONF_CONTEXT_MAX_CHARS,
     CONF_INCLUDE_EXPOSED_ENTITIES,
     CONF_PROMPT,
+    DEFAULT_AUTO_FOLLOW_UP,
     DEFAULT_CONTEXT_MAX_CHARS,
     DEFAULT_INCLUDE_EXPOSED_ENTITIES,
     DEFAULT_MAX_HISTORY_MESSAGES,
@@ -29,6 +31,17 @@ from .const import (
 )
 
 _LOGGER = logging.getLogger(__name__)
+_QUESTION_ENDINGS = ("?", "？")
+_INLINE_QUESTION_ENDINGS = ("?", "？")
+_TRAILING_FOLLOW_UP_MAX_CHARS = 120
+_TRAILING_FOLLOW_UP_MAX_WORDS = 20
+_TRAILING_FOLLOW_UP_MAX_SENTENCE_ENDERS = 1
+_TRAILING_CLOSERS = "\"'”’)]}»"
+_AUTO_FOLLOW_UP_PROMPT = (
+    "When voice auto follow-up is active and you want the user to reply, "
+    "give any needed answer first and end with one short, direct question as "
+    "the final sentence. Do not add any words after the question mark."
+)
 
 
 class HermesConversationAgent(AbstractConversationAgent):
@@ -65,9 +78,9 @@ class HermesConversationAgent(AbstractConversationAgent):
                 intent.IntentResponseErrorCode.UNKNOWN,
                 "An internal error occurred. Check the logs.",
             )
-            return ConversationResult(
-                response=intent_response,
-                conversation_id=user_input.conversation_id or "default",
+            return self._build_conversation_result(
+                intent_response,
+                user_input.conversation_id or "default",
             )
 
     async def _async_process_inner(
@@ -108,9 +121,9 @@ class HermesConversationAgent(AbstractConversationAgent):
                 intent.IntentResponseErrorCode.UNKNOWN,
                 f"Error communicating with Hermes Agent: {err}",
             )
-            return ConversationResult(
-                response=intent_response,
-                conversation_id=conv_id,
+            return self._build_conversation_result(
+                intent_response,
+                conv_id,
             )
 
         # Update conversation history
@@ -131,10 +144,14 @@ class HermesConversationAgent(AbstractConversationAgent):
         # Build response
         intent_response = intent.IntentResponse(language=user_input.language)
         intent_response.async_set_speech(response_text)
+        continue_conversation = self._should_continue_conversation(
+            options, response_text
+        )
 
-        return ConversationResult(
-            response=intent_response,
-            conversation_id=conv_id,
+        return self._build_conversation_result(
+            intent_response,
+            conv_id,
+            continue_conversation=continue_conversation,
         )
 
     async def _get_response(
@@ -176,7 +193,7 @@ class HermesConversationAgent(AbstractConversationAgent):
         """Render the system prompt template with HA context."""
         prompt_template = options.get(CONF_PROMPT, DEFAULT_PROMPT)
         if not prompt_template:
-            return ""
+            return self._append_auto_follow_up_prompt(options, "")
 
         # Build template variables
         variables: dict[str, Any] = {
@@ -196,10 +213,26 @@ class HermesConversationAgent(AbstractConversationAgent):
         # Render with HA's template engine
         try:
             tpl = template.Template(prompt_template, self.hass)
-            return tpl.async_render(variables)
+            rendered_prompt = tpl.async_render(variables)
         except template.TemplateError as err:
             _LOGGER.warning("System prompt template error: %s", err)
-            return prompt_template
+            rendered_prompt = prompt_template
+
+        return self._append_auto_follow_up_prompt(options, rendered_prompt)
+
+    def _append_auto_follow_up_prompt(
+        self,
+        options: dict[str, Any],
+        system_prompt: str,
+    ) -> str:
+        """Append extra guidance that makes spoken follow-up turns cleaner."""
+        if not options.get(CONF_AUTO_FOLLOW_UP, DEFAULT_AUTO_FOLLOW_UP):
+            return system_prompt
+
+        if system_prompt:
+            return f"{system_prompt}\n\n{_AUTO_FOLLOW_UP_PROMPT}"
+
+        return _AUTO_FOLLOW_UP_PROMPT
 
     def _get_exposed_entities(
         self, options: dict[str, Any]
@@ -235,3 +268,58 @@ class HermesConversationAgent(AbstractConversationAgent):
             entities.append(entity_info)
 
         return entities
+
+    def _should_continue_conversation(
+        self, options: dict[str, Any], response_text: str
+    ) -> bool:
+        """Return whether the voice pipeline should keep listening."""
+        if not options.get(CONF_AUTO_FOLLOW_UP, DEFAULT_AUTO_FOLLOW_UP):
+            return False
+
+        stripped_text = response_text.strip().rstrip(_TRAILING_CLOSERS)
+        if not stripped_text:
+            return False
+
+        if stripped_text.endswith(_QUESTION_ENDINGS):
+            return True
+
+        last_question_pos = max(
+            stripped_text.rfind(marker) for marker in _INLINE_QUESTION_ENDINGS
+        )
+        if last_question_pos == -1:
+            return False
+
+        trailing_text = stripped_text[last_question_pos + 1 :].strip()
+        if not trailing_text:
+            return True
+
+        trailing_words = trailing_text.split()
+        trailing_sentence_enders = sum(
+            trailing_text.count(marker) for marker in ".!?！？;；"
+        )
+
+        return (
+            len(trailing_text) <= _TRAILING_FOLLOW_UP_MAX_CHARS
+            and len(trailing_words) <= _TRAILING_FOLLOW_UP_MAX_WORDS
+            and trailing_sentence_enders <= _TRAILING_FOLLOW_UP_MAX_SENTENCE_ENDERS
+        )
+
+    def _build_conversation_result(
+        self,
+        intent_response: intent.IntentResponse,
+        conversation_id: str,
+        *,
+        continue_conversation: bool = False,
+    ) -> ConversationResult:
+        """Build a conversation result, preserving compatibility with older HA."""
+        result_kwargs: dict[str, Any] = {
+            "response": intent_response,
+            "conversation_id": conversation_id,
+        }
+
+        if "continue_conversation" in getattr(
+            ConversationResult, "__dataclass_fields__", {}
+        ):
+            result_kwargs["continue_conversation"] = continue_conversation
+
+        return ConversationResult(**result_kwargs)

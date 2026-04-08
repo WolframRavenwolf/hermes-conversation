@@ -11,6 +11,7 @@ A [Home Assistant](https://home-assistant.io/) custom integration that connects 
 - **Streaming** — low latency for voice pipelines (first token arrives fast)
 - **Entity exposure** — includes your smart home device states in the system prompt
 - **Multi-turn** — maintains conversation history across turns
+- **Auto follow-up** — keeps the voice conversation open when Hermes ends with a question
 - **Username resolution** — passes the user's name to the agent
 - **Configurable** — connection settings and prompt options can be changed anytime via Configure
 - **Multiple instances** — connect to both the local add-on and an external Hermes Agent
@@ -70,6 +71,7 @@ After setup, all settings can be changed via **Settings → Devices & Services �
 | System Prompt            | (built-in)          | Jinja2 template — leave empty to use Hermes Agent's own prompt |
 | Include exposed entities | No                  | Include smart home device states in the system prompt          |
 | Max context characters   | 12000               | Character limit for the entity context block                   |
+| Auto follow-up after questions | No           | Re-open the voice assistant when the reply ends in a question, including short clarifications after it. Hermes is also nudged to keep follow-up questions short and last |
 
 The default system prompt includes the current date/time, timezone, the user's name, the home name, and exposed device states (if enabled). Entity exposure is off by default since Hermes Agent can access Home Assistant entities directly when a Home Assistant token is configured in the Hermes Agent add-on.
 
