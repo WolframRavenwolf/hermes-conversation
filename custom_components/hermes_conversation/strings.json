@@ -37,7 +37,7 @@
           "auto_follow_up": "Auto follow-up after questions"
         },
         "data_description": {
-          "auto_follow_up": "Keeps the voice assistant listening in the same conversation when Hermes ends with a question, including short clarifications after it."
+          "auto_follow_up": "Keeps the voice assistant listening in the same conversation when Hermes ends with a question, including short clarifications after it. Hermes is also prompted to keep follow-up questions short and as the final sentence."
         }
       }
     }

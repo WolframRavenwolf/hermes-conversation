@@ -37,6 +37,11 @@ _TRAILING_FOLLOW_UP_MAX_CHARS = 120
 _TRAILING_FOLLOW_UP_MAX_WORDS = 20
 _TRAILING_FOLLOW_UP_MAX_SENTENCE_ENDERS = 1
 _TRAILING_CLOSERS = "\"'”’)]}»"
+_AUTO_FOLLOW_UP_PROMPT = (
+    "When voice auto follow-up is active and you want the user to reply, "
+    "give any needed answer first and end with one short, direct question as "
+    "the final sentence. Do not add any words after the question mark."
+)
 
 
 class HermesConversationAgent(AbstractConversationAgent):
@@ -188,7 +193,7 @@ class HermesConversationAgent(AbstractConversationAgent):
         """Render the system prompt template with HA context."""
         prompt_template = options.get(CONF_PROMPT, DEFAULT_PROMPT)
         if not prompt_template:
-            return ""
+            return self._append_auto_follow_up_prompt(options, "")
 
         # Build template variables
         variables: dict[str, Any] = {
@@ -208,10 +213,26 @@ class HermesConversationAgent(AbstractConversationAgent):
         # Render with HA's template engine
         try:
             tpl = template.Template(prompt_template, self.hass)
-            return tpl.async_render(variables)
+            rendered_prompt = tpl.async_render(variables)
         except template.TemplateError as err:
             _LOGGER.warning("System prompt template error: %s", err)
-            return prompt_template
+            rendered_prompt = prompt_template
+
+        return self._append_auto_follow_up_prompt(options, rendered_prompt)
+
+    def _append_auto_follow_up_prompt(
+        self,
+        options: dict[str, Any],
+        system_prompt: str,
+    ) -> str:
+        """Append extra guidance that makes spoken follow-up turns cleaner."""
+        if not options.get(CONF_AUTO_FOLLOW_UP, DEFAULT_AUTO_FOLLOW_UP):
+            return system_prompt
+
+        if system_prompt:
+            return f"{system_prompt}\n\n{_AUTO_FOLLOW_UP_PROMPT}"
+
+        return _AUTO_FOLLOW_UP_PROMPT
 
     def _get_exposed_entities(
         self, options: dict[str, Any]
