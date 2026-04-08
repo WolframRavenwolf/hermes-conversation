@@ -20,6 +20,7 @@ from homeassistant.helpers.selector import TextSelector, TextSelectorConfig
 from .api import HermesApiClient, HermesAuthError, HermesConnectionError
 from .const import (
     CONF_API_KEY,
+    CONF_AUTO_FOLLOW_UP,
     CONF_CONTEXT_MAX_CHARS,
     CONF_HOST,
     CONF_USE_SSL,
@@ -28,6 +29,7 @@ from .const import (
     CONF_PORT,
     CONF_PROMPT,
     DEFAULT_CONTEXT_MAX_CHARS,
+    DEFAULT_AUTO_FOLLOW_UP,
     DEFAULT_INCLUDE_EXPOSED_ENTITIES,
     DEFAULT_PORT,
     DEFAULT_PROMPT,
@@ -184,6 +186,13 @@ class HermesConversationOptionsFlow(OptionsFlow):
                             CONF_CONTEXT_MAX_CHARS, DEFAULT_CONTEXT_MAX_CHARS
                         ),
                     ): vol.All(vol.Coerce(int), vol.Range(min=1000, max=200000)),
+                    vol.Optional(
+                        CONF_AUTO_FOLLOW_UP,
+                        default=options.get(
+                            CONF_AUTO_FOLLOW_UP,
+                            DEFAULT_AUTO_FOLLOW_UP,
+                        ),
+                    ): bool,
                 }
             ),
         )

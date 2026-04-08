@@ -17,6 +17,7 @@ CONF_VERIFY_SSL = "verify_ssl"
 CONF_PROMPT = "prompt"
 CONF_INCLUDE_EXPOSED_ENTITIES = "include_exposed_entities"
 CONF_CONTEXT_MAX_CHARS = "context_max_chars"
+CONF_AUTO_FOLLOW_UP = "auto_follow_up"
 
 # ---------------------------------------------------------------------------
 # Defaults
@@ -25,6 +26,7 @@ DEFAULT_HOST = "homeassistant.local"
 DEFAULT_PORT = 8443
 DEFAULT_CONTEXT_MAX_CHARS = 12000
 DEFAULT_INCLUDE_EXPOSED_ENTITIES = False
+DEFAULT_AUTO_FOLLOW_UP = False
 DEFAULT_TIMEOUT = 120
 DEFAULT_STREAM_TIMEOUT = 300
 DEFAULT_MAX_HISTORY_MESSAGES = 100
