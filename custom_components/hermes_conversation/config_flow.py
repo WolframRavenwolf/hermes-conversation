@@ -19,18 +19,31 @@ from homeassistant.helpers.selector import TextSelector, TextSelectorConfig
 
 from .api import HermesApiClient, HermesAuthError, HermesConnectionError
 from .const import (
+    CONF_ALWAYS_SPEAK_FALLBACK,
     CONF_API_KEY,
     CONF_CONTEXT_MAX_CHARS,
+    CONF_ENABLE_CONTINUED_CONVERSATION,
+    CONF_ENABLE_SESSION_REUSE,
+    CONF_EXPOSE_DEVICE_CONTEXT,
+    CONF_FALLBACK_MEDIA_PLAYER,
+    CONF_FALLBACK_TTS_ENGINE,
     CONF_HOST,
-    CONF_USE_SSL,
-    CONF_VERIFY_SSL,
     CONF_INCLUDE_EXPOSED_ENTITIES,
     CONF_PORT,
     CONF_PROMPT,
+    CONF_SESSION_TIMEOUT_SECONDS,
+    CONF_USE_SSL,
+    CONF_VERIFY_SSL,
+    DEFAULT_ALWAYS_SPEAK_FALLBACK,
     DEFAULT_CONTEXT_MAX_CHARS,
-    DEFAULT_INCLUDE_EXPOSED_ENTITIES,
+    DEFAULT_ENABLE_CONTINUED_CONVERSATION,
+    DEFAULT_ENABLE_SESSION_REUSE,
+    DEFAULT_EXPOSE_DEVICE_CONTEXT,
+    DEFAULT_FALLBACK_MEDIA_PLAYER,
+    DEFAULT_FALLBACK_TTS_ENGINE,
     DEFAULT_PORT,
     DEFAULT_PROMPT,
+    DEFAULT_SESSION_TIMEOUT_SECONDS,
     DOMAIN,
 )
 
@@ -121,7 +134,6 @@ class HermesConversationOptionsFlow(OptionsFlow):
     ) -> dict[str, Any]:
         """Manage the options."""
         if user_input is not None:
-            # Split: connection settings go into data, the rest into options
             new_data = {}
             new_options = {}
             for key, value in user_input.items():
@@ -130,7 +142,6 @@ class HermesConversationOptionsFlow(OptionsFlow):
                 else:
                     new_options[key] = value
 
-            # Update config entry data if connection settings changed
             if new_data:
                 self.hass.config_entries.async_update_entry(
                     self.config_entry, data={**self.config_entry.data, **new_data}
@@ -175,7 +186,7 @@ class HermesConversationOptionsFlow(OptionsFlow):
                         CONF_INCLUDE_EXPOSED_ENTITIES,
                         default=options.get(
                             CONF_INCLUDE_EXPOSED_ENTITIES,
-                            DEFAULT_INCLUDE_EXPOSED_ENTITIES,
+                            False,
                         ),
                     ): bool,
                     vol.Optional(
@@ -184,6 +195,55 @@ class HermesConversationOptionsFlow(OptionsFlow):
                             CONF_CONTEXT_MAX_CHARS, DEFAULT_CONTEXT_MAX_CHARS
                         ),
                     ): vol.All(vol.Coerce(int), vol.Range(min=1000, max=200000)),
+                    vol.Optional(
+                        CONF_ENABLE_CONTINUED_CONVERSATION,
+                        default=options.get(
+                            CONF_ENABLE_CONTINUED_CONVERSATION,
+                            DEFAULT_ENABLE_CONTINUED_CONVERSATION,
+                        ),
+                    ): bool,
+                    vol.Optional(
+                        CONF_ENABLE_SESSION_REUSE,
+                        default=options.get(
+                            CONF_ENABLE_SESSION_REUSE,
+                            DEFAULT_ENABLE_SESSION_REUSE,
+                        ),
+                    ): bool,
+                    vol.Optional(
+                        CONF_SESSION_TIMEOUT_SECONDS,
+                        default=options.get(
+                            CONF_SESSION_TIMEOUT_SECONDS,
+                            DEFAULT_SESSION_TIMEOUT_SECONDS,
+                        ),
+                    ): vol.All(vol.Coerce(int), vol.Range(min=0, max=86400)),
+                    vol.Optional(
+                        CONF_EXPOSE_DEVICE_CONTEXT,
+                        default=options.get(
+                            CONF_EXPOSE_DEVICE_CONTEXT,
+                            DEFAULT_EXPOSE_DEVICE_CONTEXT,
+                        ),
+                    ): bool,
+                    vol.Optional(
+                        CONF_ALWAYS_SPEAK_FALLBACK,
+                        default=options.get(
+                            CONF_ALWAYS_SPEAK_FALLBACK,
+                            DEFAULT_ALWAYS_SPEAK_FALLBACK,
+                        ),
+                    ): bool,
+                    vol.Optional(
+                        CONF_FALLBACK_MEDIA_PLAYER,
+                        default=options.get(
+                            CONF_FALLBACK_MEDIA_PLAYER,
+                            DEFAULT_FALLBACK_MEDIA_PLAYER,
+                        ),
+                    ): str,
+                    vol.Optional(
+                        CONF_FALLBACK_TTS_ENGINE,
+                        default=options.get(
+                            CONF_FALLBACK_TTS_ENGINE,
+                            DEFAULT_FALLBACK_TTS_ENGINE,
+                        ),
+                    ): str,
                 }
             ),
         )

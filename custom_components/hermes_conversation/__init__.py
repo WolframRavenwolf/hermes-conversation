@@ -32,12 +32,14 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
         verify_ssl=entry.data.get(CONF_VERIFY_SSL, False),
     )
 
-    agent = HermesConversationAgent(hass, entry, client)
-
     hass.data.setdefault(DOMAIN, {})
+    session_map: dict[str, dict[str, object]] = {}
+    agent = HermesConversationAgent(hass, entry, client, session_map=session_map)
+
     hass.data[DOMAIN][entry.entry_id] = {
         "client": client,
         "agent": agent,
+        "sessions": session_map,
     }
 
     async_set_agent(hass, entry, agent)
