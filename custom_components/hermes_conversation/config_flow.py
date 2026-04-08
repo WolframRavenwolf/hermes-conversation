@@ -21,6 +21,7 @@ from .api import HermesApiClient, HermesAuthError, HermesConnectionError
 from .const import (
     CONF_API_KEY,
     CONF_CONTEXT_MAX_CHARS,
+    CONF_HIDE_TOOL_TRACES,
     CONF_HOST,
     CONF_USE_SSL,
     CONF_VERIFY_SSL,
@@ -28,6 +29,7 @@ from .const import (
     CONF_PORT,
     CONF_PROMPT,
     DEFAULT_CONTEXT_MAX_CHARS,
+    DEFAULT_HIDE_TOOL_TRACES,
     DEFAULT_INCLUDE_EXPOSED_ENTITIES,
     DEFAULT_PORT,
     DEFAULT_PROMPT,
@@ -184,6 +186,12 @@ class HermesConversationOptionsFlow(OptionsFlow):
                             CONF_CONTEXT_MAX_CHARS, DEFAULT_CONTEXT_MAX_CHARS
                         ),
                     ): vol.All(vol.Coerce(int), vol.Range(min=1000, max=200000)),
+                    vol.Optional(
+                        CONF_HIDE_TOOL_TRACES,
+                        default=options.get(
+                            CONF_HIDE_TOOL_TRACES, DEFAULT_HIDE_TOOL_TRACES
+                        ),
+                    ): bool,
                 }
             ),
         )

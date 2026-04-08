@@ -27,8 +27,14 @@ from .const import (
     DEFAULT_MAX_HISTORY_MESSAGES,
     DEFAULT_PROMPT,
 )
+from .tool_trace_filter import (
+    append_tool_trace_prompt,
+    sanitize_response_text,
+    should_hide_tool_traces,
+)
 
 _LOGGER = logging.getLogger(__name__)
+_MAX_CACHED_CONVERSATIONS = 50
 
 
 class HermesConversationAgent(AbstractConversationAgent):
@@ -76,29 +82,22 @@ class HermesConversationAgent(AbstractConversationAgent):
         """Inner processing — wrapped by async_process for error logging."""
         options = self.entry.options
 
-        # Resolve username from HA auth
         user_name = await self._get_user_name(user_input)
-
-        # Build system prompt (optional — Hermes Agent has its own)
         system_prompt = self._render_system_prompt(options, user_name)
 
-        # Append extra system prompt from HA voice pipeline if present
         extra = getattr(user_input, "extra_system_prompt", None)
         if extra:
             system_prompt = (system_prompt + "\n\n" + extra) if system_prompt else extra
 
-        # Get or create conversation history
         conv_id = user_input.conversation_id or "default"
         history = self._history.setdefault(conv_id, [])
 
-        # Build messages: system (if any) + history + new user message
         messages: list[dict[str, str]] = []
         if system_prompt:
             messages.append({"role": "system", "content": system_prompt})
         messages.extend(history)
         messages.append({"role": "user", "content": user_input.text})
 
-        # Call the API — try streaming first, fall back to non-streaming
         try:
             response_text = await self._get_response(messages)
         except HermesApiError as err:
@@ -113,22 +112,20 @@ class HermesConversationAgent(AbstractConversationAgent):
                 conversation_id=conv_id,
             )
 
-        # Update conversation history
+        if should_hide_tool_traces(options):
+            response_text = sanitize_response_text(response_text)
+
         history.append({"role": "user", "content": user_input.text})
         history.append({"role": "assistant", "content": response_text})
 
-        # Trim history if too long
         while len(history) > DEFAULT_MAX_HISTORY_MESSAGES:
-            # Remove oldest user/assistant pair
             history.pop(0)
             if history and history[0]["role"] == "assistant":
                 history.pop(0)
 
-        # Evict oldest conversations if we have too many
-        while len(self._history) > 50:
+        while len(self._history) > _MAX_CACHED_CONVERSATIONS:
             self._history.popitem(last=False)
 
-        # Build response
         intent_response = intent.IntentResponse(language=user_input.language)
         intent_response.async_set_speech(response_text)
 
@@ -142,7 +139,6 @@ class HermesConversationAgent(AbstractConversationAgent):
         messages: list[dict[str, str]],
     ) -> str:
         """Get a response from the API, trying streaming first."""
-        # Try streaming for lower TTFB
         try:
             chunks: list[str] = []
             async for delta in self.client.async_stream_message(messages):
@@ -153,7 +149,6 @@ class HermesConversationAgent(AbstractConversationAgent):
         except HermesApiError:
             _LOGGER.debug("Streaming failed, falling back to non-streaming")
 
-        # Fall back to non-streaming
         return await self.client.async_send_message(messages)
 
     async def _get_user_name(self, user_input: ConversationInput) -> str:
@@ -176,15 +171,13 @@ class HermesConversationAgent(AbstractConversationAgent):
         """Render the system prompt template with HA context."""
         prompt_template = options.get(CONF_PROMPT, DEFAULT_PROMPT)
         if not prompt_template:
-            return ""
+            return append_tool_trace_prompt(options, "")
 
-        # Build template variables
         variables: dict[str, Any] = {
             "ha_name": self.hass.config.location_name,
             "user_name": user_name,
         }
 
-        # Include exposed entities if enabled
         include_entities = options.get(
             CONF_INCLUDE_EXPOSED_ENTITIES, DEFAULT_INCLUDE_EXPOSED_ENTITIES
         )
@@ -193,13 +186,14 @@ class HermesConversationAgent(AbstractConversationAgent):
         else:
             variables["exposed_entities"] = []
 
-        # Render with HA's template engine
         try:
             tpl = template.Template(prompt_template, self.hass)
-            return tpl.async_render(variables)
+            rendered_prompt = tpl.async_render(variables)
         except template.TemplateError as err:
             _LOGGER.warning("System prompt template error: %s", err)
-            return prompt_template
+            rendered_prompt = prompt_template
+
+        return append_tool_trace_prompt(options, rendered_prompt)
 
     def _get_exposed_entities(
         self, options: dict[str, Any]
@@ -210,7 +204,6 @@ class HermesConversationAgent(AbstractConversationAgent):
         total_chars = 0
 
         for state in self.hass.states.async_all():
-            # Check if entity is exposed to conversation
             try:
                 if not async_should_expose(
                     self.hass, "conversation", state.entity_id
@@ -225,9 +218,11 @@ class HermesConversationAgent(AbstractConversationAgent):
                 "state": str(state.state),
             }
 
-            # Estimate character usage
-            line = f"- {entity_info['entity_id']} ({entity_info['name']}): {entity_info['state']}"
-            total_chars += len(line) + 1  # +1 for newline
+            line = (
+                f"- {entity_info['entity_id']} "
+                f"({entity_info['name']}): {entity_info['state']}"
+            )
+            total_chars += len(line) + 1
 
             if total_chars > max_chars:
                 break
