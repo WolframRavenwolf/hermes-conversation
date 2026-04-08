@@ -1,11 +1,13 @@
-"""Conversation agent for Hermes Agent."""
+"""Conversation entity for Hermes Agent."""
 
 from __future__ import annotations
 
 import logging
 from collections import OrderedDict
+from collections.abc import AsyncIterator
 from typing import Any
 
+from homeassistant.components import conversation as ha_conversation
 from homeassistant.components.conversation import (
     AbstractConversationAgent,
     ConversationInput,
@@ -16,6 +18,18 @@ from homeassistant.components.homeassistant.exposed_entities import async_should
 from homeassistant.config_entries import ConfigEntry
 from homeassistant.core import HomeAssistant
 from homeassistant.helpers import intent, template
+from homeassistant.helpers.entity_platform import AddConfigEntryEntitiesCallback
+
+try:
+    from homeassistant.components.conversation.chat_log import (
+        ChatLog,
+        async_get_chat_log,
+    )
+    from homeassistant.helpers.chat_session import async_get_chat_session
+except ImportError:  # pragma: no cover - compatibility with older Home Assistant
+    ChatLog = Any  # type: ignore[misc,assignment]
+    async_get_chat_log = None
+    async_get_chat_session = None
 
 from .api import HermesApiClient, HermesApiError
 from .const import (
@@ -26,13 +40,33 @@ from .const import (
     DEFAULT_INCLUDE_EXPOSED_ENTITIES,
     DEFAULT_MAX_HISTORY_MESSAGES,
     DEFAULT_PROMPT,
+    DOMAIN,
 )
 
 _LOGGER = logging.getLogger(__name__)
+_MAX_CACHED_CONVERSATIONS = 50
+_HAS_CHAT_LOG_API = (
+    async_get_chat_log is not None and async_get_chat_session is not None
+)
 
 
-class HermesConversationAgent(AbstractConversationAgent):
-    """Hermes Agent conversation agent for Home Assistant."""
+async def async_setup_entry(
+    hass: HomeAssistant,
+    entry: ConfigEntry,
+    async_add_entities: AddConfigEntryEntitiesCallback,
+) -> None:
+    """Set up the Hermes conversation entity."""
+    client: HermesApiClient = hass.data[DOMAIN][entry.entry_id]["client"]
+    async_add_entities([HermesConversationEntity(hass, entry, client)])
+
+
+class HermesConversationEntity(
+    ha_conversation.ConversationEntity,
+    AbstractConversationAgent,
+):
+    """Hermes Agent conversation entity for Home Assistant."""
+
+    _attr_supports_streaming = True
 
     def __init__(
         self,
@@ -44,6 +78,11 @@ class HermesConversationAgent(AbstractConversationAgent):
         self.hass = hass
         self.entry = entry
         self.client = client
+        self._attr_unique_id = entry.entry_id
+        self._attr_name = entry.title or "Hermes Agent"
+        self._attr_supported_features = (
+            ha_conversation.ConversationEntityFeature.CONTROL
+        )
         # conversation_id -> list of {"role": ..., "content": ...}
         self._history: OrderedDict[str, list[dict[str, str]]] = OrderedDict()
 
@@ -52,12 +91,24 @@ class HermesConversationAgent(AbstractConversationAgent):
         """Return supported languages (all — the LLM handles it)."""
         return MATCH_ALL
 
+    async def async_added_to_hass(self) -> None:
+        """Register the entity as both conversation entity and legacy agent."""
+        await super().async_added_to_hass()
+        ha_conversation.async_set_agent(self.hass, self.entry, self)
+
+    async def async_will_remove_from_hass(self) -> None:
+        """Unregister the legacy agent alias when removing the entity."""
+        ha_conversation.async_unset_agent(self.hass, self.entry)
+        await super().async_will_remove_from_hass()
+
     async def async_process(
         self, user_input: ConversationInput
     ) -> ConversationResult:
         """Process a conversation turn."""
         try:
-            return await self._async_process_inner(user_input)
+            if _HAS_CHAT_LOG_API:
+                return await self._async_process_modern(user_input)
+            return await self._async_process_legacy(user_input)
         except Exception:
             _LOGGER.exception("Unexpected error in async_process")
             intent_response = intent.IntentResponse(language=user_input.language)
@@ -65,40 +116,81 @@ class HermesConversationAgent(AbstractConversationAgent):
                 intent.IntentResponseErrorCode.UNKNOWN,
                 "An internal error occurred. Check the logs.",
             )
-            return ConversationResult(
-                response=intent_response,
-                conversation_id=user_input.conversation_id or "default",
+            return self._build_conversation_result(
+                intent_response,
+                user_input.conversation_id or "default",
             )
 
-    async def _async_process_inner(
+    async def _async_process_modern(
         self, user_input: ConversationInput
     ) -> ConversationResult:
-        """Inner processing — wrapped by async_process for error logging."""
+        """Process a conversation turn using Home Assistant chat sessions."""
+        assert async_get_chat_log is not None
+        assert async_get_chat_session is not None
+
+        with (
+            async_get_chat_session(self.hass, user_input.conversation_id) as session,
+            async_get_chat_log(self.hass, session, user_input) as chat_log,
+        ):
+            return await self._async_handle_message(user_input, chat_log)
+
+    async def _async_handle_message(
+        self,
+        user_input: ConversationInput,
+        chat_log: ChatLog,
+    ) -> ConversationResult:
+        """Handle a conversation turn using the modern chat log API."""
         options = self.entry.options
-
-        # Resolve username from HA auth
         user_name = await self._get_user_name(user_input)
+        system_prompt = self._build_system_prompt(options, user_input, user_name)
+        messages = self._build_messages_from_chat_log(chat_log, system_prompt)
 
-        # Build system prompt (optional — Hermes Agent has its own)
-        system_prompt = self._render_system_prompt(options, user_name)
+        response_text = ""
 
-        # Append extra system prompt from HA voice pipeline if present
-        extra = getattr(user_input, "extra_system_prompt", None)
-        if extra:
-            system_prompt = (system_prompt + "\n\n" + extra) if system_prompt else extra
+        try:
+            async for content in chat_log.async_add_delta_content_stream(
+                self.entity_id or self.entry.entry_id,
+                self._async_stream_assistant_response(messages),
+            ):
+                if (
+                    getattr(content, "role", None) == "assistant"
+                    and getattr(content, "content", None) is not None
+                ):
+                    response_text += content.content
+        except HermesApiError as err:
+            _LOGGER.error("Hermes API error: %s", err)
+            intent_response = intent.IntentResponse(language=user_input.language)
+            intent_response.async_set_error(
+                intent.IntentResponseErrorCode.UNKNOWN,
+                f"Error communicating with Hermes Agent: {err}",
+            )
+            return self._build_conversation_result(
+                intent_response,
+                chat_log.conversation_id,
+            )
 
-        # Get or create conversation history
+        intent_response = intent.IntentResponse(language=user_input.language)
+        intent_response.async_set_speech(response_text)
+
+        return self._build_conversation_result(
+            intent_response,
+            chat_log.conversation_id,
+        )
+
+    async def _async_process_legacy(
+        self, user_input: ConversationInput
+    ) -> ConversationResult:
+        """Process a conversation turn on older Home Assistant versions."""
+        options = self.entry.options
+        user_name = await self._get_user_name(user_input)
+        system_prompt = self._build_system_prompt(options, user_input, user_name)
+
         conv_id = user_input.conversation_id or "default"
         history = self._history.setdefault(conv_id, [])
 
-        # Build messages: system (if any) + history + new user message
-        messages: list[dict[str, str]] = []
-        if system_prompt:
-            messages.append({"role": "system", "content": system_prompt})
-        messages.extend(history)
+        messages = self._build_messages_from_history(history, system_prompt)
         messages.append({"role": "user", "content": user_input.text})
 
-        # Call the API — try streaming first, fall back to non-streaming
         try:
             response_text = await self._get_response(messages)
         except HermesApiError as err:
@@ -108,41 +200,61 @@ class HermesConversationAgent(AbstractConversationAgent):
                 intent.IntentResponseErrorCode.UNKNOWN,
                 f"Error communicating with Hermes Agent: {err}",
             )
-            return ConversationResult(
-                response=intent_response,
-                conversation_id=conv_id,
+            return self._build_conversation_result(
+                intent_response,
+                conv_id,
             )
 
-        # Update conversation history
         history.append({"role": "user", "content": user_input.text})
         history.append({"role": "assistant", "content": response_text})
+        self._trim_legacy_history(history)
+        self._trim_cached_conversations()
 
-        # Trim history if too long
-        while len(history) > DEFAULT_MAX_HISTORY_MESSAGES:
-            # Remove oldest user/assistant pair
-            history.pop(0)
-            if history and history[0]["role"] == "assistant":
-                history.pop(0)
-
-        # Evict oldest conversations if we have too many
-        while len(self._history) > 50:
-            self._history.popitem(last=False)
-
-        # Build response
         intent_response = intent.IntentResponse(language=user_input.language)
         intent_response.async_set_speech(response_text)
 
-        return ConversationResult(
-            response=intent_response,
-            conversation_id=conv_id,
-        )
+        return self._build_conversation_result(intent_response, conv_id)
+
+    async def _async_stream_assistant_response(
+        self,
+        messages: list[dict[str, str]],
+    ) -> AsyncIterator[dict[str, str]]:
+        """Yield assistant deltas for Home Assistant's chat log."""
+        yield {"role": "assistant"}
+
+        received_delta = False
+
+        try:
+            async for delta in self.client.async_stream_message(messages):
+                if not delta:
+                    continue
+                received_delta = True
+                yield {"content": delta}
+        except HermesApiError as err:
+            if received_delta:
+                _LOGGER.warning(
+                    "Streaming interrupted after partial response, keeping partial text: %s",
+                    err,
+                )
+                return
+
+            _LOGGER.debug(
+                "Streaming failed before first token, falling back to non-streaming: %s",
+                err,
+            )
+
+        if received_delta:
+            return
+
+        response_text = await self.client.async_send_message(messages)
+        if response_text:
+            yield {"content": response_text}
 
     async def _get_response(
         self,
         messages: list[dict[str, str]],
     ) -> str:
         """Get a response from the API, trying streaming first."""
-        # Try streaming for lower TTFB
         try:
             chunks: list[str] = []
             async for delta in self.client.async_stream_message(messages):
@@ -153,8 +265,73 @@ class HermesConversationAgent(AbstractConversationAgent):
         except HermesApiError:
             _LOGGER.debug("Streaming failed, falling back to non-streaming")
 
-        # Fall back to non-streaming
         return await self.client.async_send_message(messages)
+
+    def _build_messages_from_chat_log(
+        self,
+        chat_log: ChatLog,
+        system_prompt: str,
+    ) -> list[dict[str, str]]:
+        """Build Hermes messages from a Home Assistant chat log."""
+        history_messages: list[dict[str, str]] = []
+
+        for content in chat_log.content:
+            role = getattr(content, "role", None)
+            message_text = getattr(content, "content", None)
+
+            if role not in ("user", "assistant", "system") or not message_text:
+                continue
+
+            history_messages.append({"role": role, "content": message_text})
+
+        return self._build_messages_from_history(history_messages, system_prompt)
+
+    def _build_messages_from_history(
+        self,
+        history: list[dict[str, str]],
+        system_prompt: str,
+    ) -> list[dict[str, str]]:
+        """Build Hermes messages from text history."""
+        messages: list[dict[str, str]] = []
+
+        if system_prompt:
+            messages.append({"role": "system", "content": system_prompt})
+
+        if history:
+            messages.extend(history[-DEFAULT_MAX_HISTORY_MESSAGES:])
+
+        return messages
+
+    def _trim_legacy_history(self, history: list[dict[str, str]]) -> None:
+        """Trim legacy in-memory history."""
+        while len(history) > DEFAULT_MAX_HISTORY_MESSAGES:
+            history.pop(0)
+            if history and history[0]["role"] == "assistant":
+                history.pop(0)
+
+    def _trim_cached_conversations(self) -> None:
+        """Evict oldest legacy conversations if too many are cached."""
+        while len(self._history) > _MAX_CACHED_CONVERSATIONS:
+            self._history.popitem(last=False)
+
+    def _build_system_prompt(
+        self,
+        options: dict[str, Any],
+        user_input: ConversationInput,
+        user_name: str,
+    ) -> str:
+        """Build the system prompt, including pipeline-provided extra instructions."""
+        system_prompt = self._render_system_prompt(options, user_name)
+
+        extra_system_prompt = getattr(user_input, "extra_system_prompt", None)
+        if extra_system_prompt:
+            return (
+                f"{system_prompt}\n\n{extra_system_prompt}"
+                if system_prompt
+                else extra_system_prompt
+            )
+
+        return system_prompt
 
     async def _get_user_name(self, user_input: ConversationInput) -> str:
         """Resolve the display name of the user from HA auth."""
@@ -178,13 +355,11 @@ class HermesConversationAgent(AbstractConversationAgent):
         if not prompt_template:
             return ""
 
-        # Build template variables
         variables: dict[str, Any] = {
             "ha_name": self.hass.config.location_name,
             "user_name": user_name,
         }
 
-        # Include exposed entities if enabled
         include_entities = options.get(
             CONF_INCLUDE_EXPOSED_ENTITIES, DEFAULT_INCLUDE_EXPOSED_ENTITIES
         )
@@ -193,13 +368,14 @@ class HermesConversationAgent(AbstractConversationAgent):
         else:
             variables["exposed_entities"] = []
 
-        # Render with HA's template engine
         try:
             tpl = template.Template(prompt_template, self.hass)
-            return tpl.async_render(variables)
+            rendered_prompt = tpl.async_render(variables)
         except template.TemplateError as err:
             _LOGGER.warning("System prompt template error: %s", err)
-            return prompt_template
+            rendered_prompt = prompt_template
+
+        return rendered_prompt
 
     def _get_exposed_entities(
         self, options: dict[str, Any]
@@ -210,7 +386,6 @@ class HermesConversationAgent(AbstractConversationAgent):
         total_chars = 0
 
         for state in self.hass.states.async_all():
-            # Check if entity is exposed to conversation
             try:
                 if not async_should_expose(
                     self.hass, "conversation", state.entity_id
@@ -225,9 +400,11 @@ class HermesConversationAgent(AbstractConversationAgent):
                 "state": str(state.state),
             }
 
-            # Estimate character usage
-            line = f"- {entity_info['entity_id']} ({entity_info['name']}): {entity_info['state']}"
-            total_chars += len(line) + 1  # +1 for newline
+            line = (
+                f"- {entity_info['entity_id']} "
+                f"({entity_info['name']}): {entity_info['state']}"
+            )
+            total_chars += len(line) + 1
 
             if total_chars > max_chars:
                 break
@@ -235,3 +412,14 @@ class HermesConversationAgent(AbstractConversationAgent):
             entities.append(entity_info)
 
         return entities
+
+    def _build_conversation_result(
+        self,
+        intent_response: intent.IntentResponse,
+        conversation_id: str,
+    ) -> ConversationResult:
+        """Build a conversation result."""
+        return ConversationResult(
+            response=intent_response,
+            conversation_id=conversation_id,
+        )
