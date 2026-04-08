@@ -22,6 +22,7 @@ from homeassistant.helpers import device_registry as dr
 from homeassistant.helpers import intent, template
 
 from .api import HermesApiClient, HermesApiError
+from .compat import entry_value
 from .const import (
     CONF_ALWAYS_SPEAK_FALLBACK,
     CONF_CONTEXT_MAX_CHARS,
@@ -40,10 +41,11 @@ from .const import (
     DEFAULT_EXPOSE_DEVICE_CONTEXT,
     DEFAULT_FALLBACK_MEDIA_PLAYER,
     DEFAULT_FALLBACK_TTS_ENGINE,
+    DEFAULT_INCLUDE_EXPOSED_ENTITIES,
     DEFAULT_MAX_HISTORY_MESSAGES,
     DEFAULT_PROMPT,
     DEFAULT_SESSION_TIMEOUT_SECONDS,
-    DEFAULT_STREAM_TIMEOUT,
+    LEGACY_CONF_INSTRUCTIONS,
 )
 
 _LOGGER = logging.getLogger(__name__)
@@ -95,7 +97,6 @@ class HermesConversationAgent(AbstractConversationAgent):
         self, user_input: ConversationInput
     ) -> ConversationResult:
         """Inner processing — wrapped by async_process for error logging."""
-        options = self.entry.options
         conv_id = user_input.conversation_id or str(uuid.uuid4())
         continue_conversation = self._continued_conversation_enabled()
         session_reuse = self._session_reuse_enabled()
@@ -106,7 +107,7 @@ class HermesConversationAgent(AbstractConversationAgent):
         user_name = await self._get_user_name(user_input)
 
         # Build system prompt (optional — Hermes Agent has its own)
-        system_prompt = self._render_system_prompt(options, user_name)
+        system_prompt = self._render_system_prompt(user_name)
 
         # Append extra system prompt from HA voice pipeline if present
         extra = getattr(user_input, "extra_system_prompt", None)
@@ -209,9 +210,14 @@ class HermesConversationAgent(AbstractConversationAgent):
             _LOGGER.debug("Could not resolve username", exc_info=True)
         return "the user"
 
-    def _render_system_prompt(self, options: dict[str, Any], user_name: str) -> str:
+    def _render_system_prompt(self, user_name: str) -> str:
         """Render the system prompt template with HA context."""
-        prompt_template = options.get(CONF_PROMPT, DEFAULT_PROMPT)
+        prompt_template = entry_value(
+            self.entry,
+            CONF_PROMPT,
+            DEFAULT_PROMPT,
+            legacy_keys=(LEGACY_CONF_INSTRUCTIONS,),
+        )
         if not prompt_template:
             return ""
 
@@ -220,11 +226,13 @@ class HermesConversationAgent(AbstractConversationAgent):
             "user_name": user_name,
         }
 
-        include_entities = options.get(
-            CONF_INCLUDE_EXPOSED_ENTITIES, DEFAULT_INCLUDE_EXPOSED_ENTITIES
+        include_entities = entry_value(
+            self.entry,
+            CONF_INCLUDE_EXPOSED_ENTITIES,
+            DEFAULT_INCLUDE_EXPOSED_ENTITIES,
         )
         if include_entities:
-            variables["exposed_entities"] = self._get_exposed_entities(options)
+            variables["exposed_entities"] = self._get_exposed_entities()
         else:
             variables["exposed_entities"] = []
 
@@ -235,11 +243,13 @@ class HermesConversationAgent(AbstractConversationAgent):
             _LOGGER.warning("System prompt template error: %s", err)
             return prompt_template
 
-    def _get_exposed_entities(
-        self, options: dict[str, Any]
-    ) -> list[dict[str, str]]:
+    def _get_exposed_entities(self) -> list[dict[str, str]]:
         """Get a list of entities exposed to the conversation agent."""
-        max_chars = options.get(CONF_CONTEXT_MAX_CHARS, DEFAULT_CONTEXT_MAX_CHARS)
+        max_chars = entry_value(
+            self.entry,
+            CONF_CONTEXT_MAX_CHARS,
+            DEFAULT_CONTEXT_MAX_CHARS,
+        )
         entities: list[dict[str, str]] = []
         total_chars = 0
 
@@ -268,7 +278,8 @@ class HermesConversationAgent(AbstractConversationAgent):
 
     def _continued_conversation_enabled(self) -> bool:
         return bool(
-            self.entry.options.get(
+            entry_value(
+                self.entry,
                 CONF_ENABLE_CONTINUED_CONVERSATION,
                 DEFAULT_ENABLE_CONTINUED_CONVERSATION,
             )
@@ -276,7 +287,8 @@ class HermesConversationAgent(AbstractConversationAgent):
 
     def _session_reuse_enabled(self) -> bool:
         return bool(
-            self.entry.options.get(
+            entry_value(
+                self.entry,
                 CONF_ENABLE_SESSION_REUSE,
                 DEFAULT_ENABLE_SESSION_REUSE,
             )
@@ -287,7 +299,8 @@ class HermesConversationAgent(AbstractConversationAgent):
             return max(
                 0,
                 int(
-                    self.entry.options.get(
+                    entry_value(
+                        self.entry,
                         CONF_SESSION_TIMEOUT_SECONDS,
                         DEFAULT_SESSION_TIMEOUT_SECONDS,
                     )
@@ -298,7 +311,8 @@ class HermesConversationAgent(AbstractConversationAgent):
 
     def _device_context_enabled(self) -> bool:
         return bool(
-            self.entry.options.get(
+            entry_value(
+                self.entry,
                 CONF_EXPOSE_DEVICE_CONTEXT,
                 DEFAULT_EXPOSE_DEVICE_CONTEXT,
             )
@@ -389,18 +403,21 @@ class HermesConversationAgent(AbstractConversationAgent):
         ):
             return
 
-        speak_fallback = self.entry.options.get(
+        speak_fallback = entry_value(
+            self.entry,
             CONF_ALWAYS_SPEAK_FALLBACK,
             DEFAULT_ALWAYS_SPEAK_FALLBACK,
         )
         if not speak_fallback:
             return
 
-        media_player_entity = self.entry.options.get(
+        media_player_entity = entry_value(
+            self.entry,
             CONF_FALLBACK_MEDIA_PLAYER,
             DEFAULT_FALLBACK_MEDIA_PLAYER,
         )
-        tts_entity = self.entry.options.get(
+        tts_entity = entry_value(
+            self.entry,
             CONF_FALLBACK_TTS_ENGINE,
             DEFAULT_FALLBACK_TTS_ENGINE,
         )

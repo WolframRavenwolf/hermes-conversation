@@ -14,6 +14,7 @@ from .const import (
     API_CHAT_COMPLETIONS,
     API_HEALTH,
     API_MODELS,
+    DEFAULT_MODEL,
     DEFAULT_STREAM_TIMEOUT,
     DEFAULT_TIMEOUT,
 )
@@ -52,11 +53,17 @@ class HermesApiClient:
         api_key: str | None = None,
         use_ssl: bool = True,
         verify_ssl: bool = False,
+        model: str | None = None,
+        request_timeout: int = DEFAULT_TIMEOUT,
+        stream_timeout: int = DEFAULT_STREAM_TIMEOUT,
     ) -> None:
         self._session = session
         scheme = "https" if use_ssl else "http"
         self._base_url = f"{scheme}://{host}:{port}"
         self._api_key = api_key
+        self._model = model or DEFAULT_MODEL
+        self._request_timeout = max(1, int(request_timeout))
+        self._stream_timeout = max(self._request_timeout, int(stream_timeout))
         # ssl=False disables certificate verification (for self-signed certs)
         self._ssl: bool | None = None if not use_ssl else (None if verify_ssl else False)
         self._last_session_id: str | None = None
@@ -122,7 +129,7 @@ class HermesApiClient:
     ) -> HermesApiResult:
         """Send a non-streaming chat completion request."""
         payload = {
-            "model": "hermes-agent",
+            "model": self._model,
             "messages": messages,
             "stream": False,
         }
@@ -132,7 +139,7 @@ class HermesApiClient:
                 f"{self._base_url}{API_CHAT_COMPLETIONS}",
                 headers=self._headers(session_id=session_id),
                 json=payload,
-                timeout=aiohttp.ClientTimeout(total=DEFAULT_TIMEOUT),
+                timeout=aiohttp.ClientTimeout(total=self._request_timeout),
                 ssl=self._ssl,
             ) as resp:
                 if resp.status == 401:
@@ -163,7 +170,7 @@ class HermesApiClient:
     ) -> AsyncGenerator[str, None]:
         """Send a streaming chat completion request. Yields content deltas."""
         payload = {
-            "model": "hermes-agent",
+            "model": self._model,
             "messages": messages,
             "stream": True,
         }
@@ -174,8 +181,8 @@ class HermesApiClient:
                 headers=self._headers(session_id=session_id),
                 json=payload,
                 timeout=aiohttp.ClientTimeout(
-                    total=DEFAULT_STREAM_TIMEOUT,
-                    sock_read=DEFAULT_TIMEOUT,
+                    total=self._stream_timeout,
+                    sock_read=self._request_timeout,
                 ),
                 ssl=self._ssl,
             ) as resp:

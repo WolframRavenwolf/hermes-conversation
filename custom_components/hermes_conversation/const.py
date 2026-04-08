@@ -25,6 +25,12 @@ CONF_ALWAYS_SPEAK_FALLBACK = "always_speak_fallback"
 CONF_FALLBACK_MEDIA_PLAYER = "fallback_media_player"
 CONF_FALLBACK_TTS_ENGINE = "fallback_tts_engine"
 
+# Legacy config keys still found in existing local installs.
+LEGACY_CONF_API_BASE_URL = "api_base_url"
+LEGACY_CONF_MODEL = "model"
+LEGACY_CONF_TIMEOUT = "timeout"
+LEGACY_CONF_INSTRUCTIONS = "instructions"
+
 # ---------------------------------------------------------------------------
 # Defaults
 # ---------------------------------------------------------------------------
@@ -32,6 +38,7 @@ DEFAULT_HOST = "homeassistant.local"
 DEFAULT_PORT = 8443
 DEFAULT_CONTEXT_MAX_CHARS = 12000
 DEFAULT_INCLUDE_EXPOSED_ENTITIES = False
+DEFAULT_MODEL = "hermes-agent"
 DEFAULT_TIMEOUT = 120
 DEFAULT_STREAM_TIMEOUT = 300
 DEFAULT_MAX_HISTORY_MESSAGES = 100
