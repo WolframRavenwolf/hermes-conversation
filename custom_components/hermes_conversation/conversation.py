@@ -99,7 +99,10 @@ class HermesConversationAgent(AbstractConversationAgent):
         messages.append({"role": "user", "content": user_input.text})
 
         try:
-            response_text = await self._get_response(messages)
+            if should_hide_tool_traces(options):
+                response_text = await self._get_full_response(messages)
+            else:
+                response_text = await self._get_response(messages)
         except HermesApiError as err:
             _LOGGER.error("Hermes API error: %s", err)
             intent_response = intent.IntentResponse(language=user_input.language)
@@ -149,6 +152,13 @@ class HermesConversationAgent(AbstractConversationAgent):
         except HermesApiError:
             _LOGGER.debug("Streaming failed, falling back to non-streaming")
 
+        return await self.client.async_send_message(messages)
+
+    async def _get_full_response(
+        self,
+        messages: list[dict[str, str]],
+    ) -> str:
+        """Get a complete response from the API without streaming."""
         return await self.client.async_send_message(messages)
 
     async def _get_user_name(self, user_input: ConversationInput) -> str:
