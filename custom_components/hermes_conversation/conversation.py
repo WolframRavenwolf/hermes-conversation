@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import logging
+import re
 import time
 import uuid
 from collections import OrderedDict
@@ -49,6 +50,30 @@ from .const import (
 )
 
 _LOGGER = logging.getLogger(__name__)
+
+
+def _sanitize_text_for_speech(text: str) -> str:
+    """Convert markdown-ish assistant output into plain speech-friendly text."""
+    if not text:
+        return text
+
+    cleaned = text.replace("\r\n", "\n")
+    cleaned = re.sub(r"```(?:[\w+-]+)?\n?(.*?)```", r"\1", cleaned, flags=re.DOTALL)
+    cleaned = re.sub(r"`([^`]+)`", r"\1", cleaned)
+    cleaned = re.sub(r"!\[([^\]]*)\]\([^\)]+\)", r"\1", cleaned)
+    cleaned = re.sub(r"\[([^\]]+)\]\([^\)]+\)", r"\1", cleaned)
+    cleaned = re.sub(r"^#{1,6}\s*", "", cleaned, flags=re.MULTILINE)
+    cleaned = re.sub(r"^>+\s*", "", cleaned, flags=re.MULTILINE)
+    cleaned = re.sub(r"^\s*[-*+]\s+", "", cleaned, flags=re.MULTILINE)
+    cleaned = re.sub(r"^\s*\d+[.)]\s+", "", cleaned, flags=re.MULTILINE)
+    cleaned = re.sub(r"(\*\*|__)(.*?)\1", r"\2", cleaned)
+    cleaned = re.sub(r"(?<!\*)\*(?!\s)(.*?)(?<!\s)\*(?!\*)", r"\1", cleaned)
+    cleaned = re.sub(r"(?<!_)_(?!\s)(.*?)(?<!\s)_(?!_)", r"\1", cleaned)
+    cleaned = re.sub(r"~~(.*?)~~", r"\1", cleaned)
+    cleaned = re.sub(r"\[(.*?)\]\[[^\]]*\]", r"\1", cleaned)
+    cleaned = re.sub(r"\n{3,}", "\n\n", cleaned)
+    cleaned = re.sub(r"[ \t]+", " ", cleaned)
+    return cleaned.strip()
 
 
 class HermesConversationAgent(AbstractConversationAgent):
@@ -136,6 +161,7 @@ class HermesConversationAgent(AbstractConversationAgent):
 
         try:
             response_text = await self._get_response(messages, session_id=session_id)
+            spoken_text = _sanitize_text_for_speech(response_text)
         except HermesApiError as err:
             _LOGGER.error("Hermes API error: %s", err)
             intent_response = intent.IntentResponse(language=user_input.language)
@@ -155,7 +181,7 @@ class HermesConversationAgent(AbstractConversationAgent):
         if not session_reuse:
             history = self._history.setdefault(conv_id, [])
             history.append({"role": "user", "content": user_input.text})
-            history.append({"role": "assistant", "content": response_text})
+            history.append({"role": "assistant", "content": spoken_text})
             self._history.move_to_end(conv_id)
 
             while len(history) > DEFAULT_MAX_HISTORY_MESSAGES:
@@ -167,8 +193,8 @@ class HermesConversationAgent(AbstractConversationAgent):
                 self._history.popitem(last=False)
 
         intent_response = intent.IntentResponse(language=user_input.language)
-        intent_response.async_set_speech(response_text)
-        await self._async_speak_fallback(response_text, user_input)
+        intent_response.async_set_speech(spoken_text)
+        await self._async_speak_fallback(spoken_text, user_input)
 
         return ConversationResult(
             response=intent_response,
@@ -181,16 +207,13 @@ class HermesConversationAgent(AbstractConversationAgent):
         messages: list[dict[str, str]],
         session_id: str | None = None,
     ) -> str:
-        """Get a response from the API, trying streaming first."""
-        try:
-            chunks: list[str] = []
-            async for delta in self.client.async_stream_message(messages, session_id=session_id):
-                chunks.append(delta)
-            if chunks:
-                return "".join(chunks)
-        except HermesApiError:
-            _LOGGER.debug("Streaming failed, falling back to non-streaming")
+        """Get a response from the API.
 
+        Home Assistant voice needs clean final speech, not intermediate stream events.
+        Hermes's streaming endpoint can legitimately include tool-progress deltas for chat
+        UIs, which then get spoken out loud here. Use the non-streaming endpoint so the
+        voice pipeline only receives the final assistant text.
+        """
         result = await self.client.async_send_message(messages, session_id=session_id)
         return result.text
 
