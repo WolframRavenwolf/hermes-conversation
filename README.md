@@ -74,6 +74,8 @@ After setup, all settings can be changed via **Settings → Devices & Services �
 
 The default system prompt includes the current date/time, timezone, the user's name, the home name, and exposed device states (if enabled). Entity exposure is off by default since Hermes Agent can access Home Assistant entities directly when a Home Assistant token is configured in the Hermes Agent add-on.
 
+When `Hide tool traces in responses` is enabled, the integration sanitizes the final text after receiving the complete response. This can slightly increase first-token latency compared with the default streaming path.
+
 ## How It Works
 
 This integration communicates with Hermes Agent's OpenAI-compatible API (`/v1/chat/completions`) using only Home Assistant's built-in HTTP client — **no external Python dependencies**.

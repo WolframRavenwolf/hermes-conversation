@@ -83,11 +83,7 @@ class HermesConversationAgent(AbstractConversationAgent):
         options = self.entry.options
 
         user_name = await self._get_user_name(user_input)
-        system_prompt = self._render_system_prompt(options, user_name)
-
-        extra = getattr(user_input, "extra_system_prompt", None)
-        if extra:
-            system_prompt = (system_prompt + "\n\n" + extra) if system_prompt else extra
+        system_prompt = self._build_system_prompt(options, user_input, user_name)
 
         conv_id = user_input.conversation_id or "default"
         history = self._history.setdefault(conv_id, [])
@@ -177,11 +173,30 @@ class HermesConversationAgent(AbstractConversationAgent):
             _LOGGER.debug("Could not resolve username", exc_info=True)
         return "the user"
 
+    def _build_system_prompt(
+        self,
+        options: dict[str, Any],
+        user_input: ConversationInput,
+        user_name: str,
+    ) -> str:
+        """Build the full system prompt, including pipeline-provided extra instructions."""
+        system_prompt = self._render_system_prompt(options, user_name)
+
+        extra_system_prompt = getattr(user_input, "extra_system_prompt", None)
+        if extra_system_prompt:
+            system_prompt = (
+                f"{system_prompt}\n\n{extra_system_prompt}"
+                if system_prompt
+                else extra_system_prompt
+            )
+
+        return append_tool_trace_prompt(options, system_prompt)
+
     def _render_system_prompt(self, options: dict[str, Any], user_name: str) -> str:
-        """Render the system prompt template with HA context."""
+        """Render the configured system prompt template with HA context."""
         prompt_template = options.get(CONF_PROMPT, DEFAULT_PROMPT)
         if not prompt_template:
-            return append_tool_trace_prompt(options, "")
+            return ""
 
         variables: dict[str, Any] = {
             "ha_name": self.hass.config.location_name,
@@ -203,7 +218,7 @@ class HermesConversationAgent(AbstractConversationAgent):
             _LOGGER.warning("System prompt template error: %s", err)
             rendered_prompt = prompt_template
 
-        return append_tool_trace_prompt(options, rendered_prompt)
+        return rendered_prompt
 
     def _get_exposed_entities(
         self, options: dict[str, Any]

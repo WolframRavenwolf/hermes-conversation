@@ -17,9 +17,9 @@ _LEADING_TOOL_LABEL_RE = re.compile(
     r"^(?:[^\w\s`]+\s*)?(?:"
     r"ha_[a-z0-9_]+|"
     r"web_search|web_extract|web_crawl|"
-    r"execute_code|terminal|process|"
-    r"read_file|write_file|patch|search_files|"
-    r"browser_[a-z0-9_]+|session_search|memory"
+    r"execute_code|"
+    r"read_file|write_file|search_files|"
+    r"browser_[a-z0-9_]+|session_search"
     r")(?:\b|$)",
     re.IGNORECASE,
 )
@@ -63,11 +63,8 @@ _TOOL_TRACE_NAMES = (
     "web_extract",
     "web_crawl",
     "execute_code",
-    "terminal",
-    "process",
     "read_file",
     "write_file",
-    "patch",
     "search_files",
     "browser_navigate",
     "browser_snapshot",
@@ -79,28 +76,13 @@ _TOOL_TRACE_NAMES = (
     "browser_get_images",
     "browser_vision",
     "session_search",
-    "memory",
 )
-_TOOL_TRACE_HINTS = (
-    "ls ",
-    "curl ",
-    "python ",
-    "python3 ",
-    "bash ",
-    "sh ",
-    "jq ",
-    "rg ",
-    "git ",
-    "ha_",
-    "ha-call",
-    "from hermes_tools import",
-    "terminal(",
-    "web_search",
-    "web_extract",
-    "web_crawl",
-    "execute_code",
-    "| python",
-    "| jq",
+_CODE_TRACE_PATTERNS = (
+    re.compile(r"\bfrom hermes_tools import\b", re.IGNORECASE),
+    re.compile(r"\bterminal\(", re.IGNORECASE),
+    re.compile(r"\b(?:web_search|web_extract|web_crawl|execute_code)\b", re.IGNORECASE),
+    re.compile(r"^(?:\$+\s*)?(?:curl|python3?|bash|sh|jq|rg|git|ls)\b", re.IGNORECASE),
+    re.compile(r"\|\s*(?:python3?|jq|grep)\b", re.IGNORECASE),
 )
 
 
@@ -128,13 +110,13 @@ def sanitize_response_text(response_text: str) -> str:
 
     sanitized_text = _FENCED_CODE_BLOCK_RE.sub(
         lambda match: ""
-        if looks_like_tool_trace(match.group(1))
+        if looks_like_tool_trace(match.group(1), from_code=True)
         else match.group(0),
         response_text,
     )
     sanitized_text = _INLINE_CODE_SPAN_RE.sub(
         lambda match: ""
-        if looks_like_tool_trace(match.group(1))
+        if looks_like_tool_trace(match.group(1), from_code=True)
         else match.group(0),
         sanitized_text,
     )
@@ -148,13 +130,12 @@ def sanitize_response_text(response_text: str) -> str:
     sanitized_text = "\n".join(kept_lines)
     sanitized_text = re.sub(r"\n{3,}", "\n\n", sanitized_text)
     sanitized_text = re.sub(r"[ \t]+\n", "\n", sanitized_text)
-    sanitized_text = re.sub(r"\n[ \t]+", "\n", sanitized_text)
     sanitized_text = sanitized_text.strip()
 
     return sanitized_text or original_text
 
 
-def looks_like_tool_trace(text: str) -> bool:
+def looks_like_tool_trace(text: str, *, from_code: bool = False) -> bool:
     """Heuristically detect tool or shell traces embedded in assistant text."""
     stripped_text = text.strip()
     if not stripped_text:
@@ -175,4 +156,6 @@ def looks_like_tool_trace(text: str) -> bool:
         return True
     if _LEADING_TOOL_LABEL_RE.match(stripped_text):
         return True
-    return any(hint in lowered_text for hint in _TOOL_TRACE_HINTS)
+    if from_code:
+        return any(pattern.search(stripped_text) for pattern in _CODE_TRACE_PATTERNS)
+    return False
