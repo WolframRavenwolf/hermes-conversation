@@ -33,7 +33,11 @@
           "verify_ssl": "Verify SSL certificate",
           "prompt": "System Prompt",
           "include_exposed_entities": "Include exposed entities in prompt",
-          "context_max_chars": "Max context characters"
+          "context_max_chars": "Max context characters",
+          "hide_tool_traces": "Hide tool traces in responses"
+        },
+        "data_description": {
+          "hide_tool_traces": "Removes internal tool or shell command traces from displayed and spoken responses. When enabled, Hermes is also prompted not to expose them."
         }
       }
     }
