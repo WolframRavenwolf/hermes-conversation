@@ -31,11 +31,11 @@ from .const import (
 )
 
 _LOGGER = logging.getLogger(__name__)
-_QUESTION_ENDINGS = ("?", "？")
-_INLINE_QUESTION_ENDINGS = ("?", "？")
+_QUESTION_MARKERS = ("?", "？")
 _TRAILING_FOLLOW_UP_MAX_CHARS = 120
 _TRAILING_FOLLOW_UP_MAX_WORDS = 20
 _TRAILING_FOLLOW_UP_MAX_SENTENCE_ENDERS = 1
+_TRAILING_SENTENCE_ENDERS = ".!！;；"
 _TRAILING_CLOSERS = "\"'”’)]}»"
 _AUTO_FOLLOW_UP_PROMPT = (
     "When voice auto follow-up is active and you want the user to reply, "
@@ -280,12 +280,10 @@ class HermesConversationAgent(AbstractConversationAgent):
         if not stripped_text:
             return False
 
-        if stripped_text.endswith(_QUESTION_ENDINGS):
+        if stripped_text.endswith(_QUESTION_MARKERS):
             return True
 
-        last_question_pos = max(
-            stripped_text.rfind(marker) for marker in _INLINE_QUESTION_ENDINGS
-        )
+        last_question_pos = max(stripped_text.rfind(marker) for marker in _QUESTION_MARKERS)
         if last_question_pos == -1:
             return False
 
@@ -295,7 +293,7 @@ class HermesConversationAgent(AbstractConversationAgent):
 
         trailing_words = trailing_text.split()
         trailing_sentence_enders = sum(
-            trailing_text.count(marker) for marker in ".!?！？;；"
+            trailing_text.count(marker) for marker in _TRAILING_SENTENCE_ENDERS
         )
 
         return (
@@ -312,14 +310,14 @@ class HermesConversationAgent(AbstractConversationAgent):
         continue_conversation: bool = False,
     ) -> ConversationResult:
         """Build a conversation result, preserving compatibility with older HA."""
-        result_kwargs: dict[str, Any] = {
-            "response": intent_response,
-            "conversation_id": conversation_id,
-        }
-
-        if "continue_conversation" in getattr(
-            ConversationResult, "__dataclass_fields__", {}
-        ):
-            result_kwargs["continue_conversation"] = continue_conversation
-
-        return ConversationResult(**result_kwargs)
+        try:
+            return ConversationResult(
+                response=intent_response,
+                conversation_id=conversation_id,
+                continue_conversation=continue_conversation,
+            )
+        except TypeError:
+            return ConversationResult(
+                response=intent_response,
+                conversation_id=conversation_id,
+            )
