@@ -33,7 +33,11 @@
           "verify_ssl": "Verify SSL certificate",
           "prompt": "System Prompt",
           "include_exposed_entities": "Include exposed entities in prompt",
-          "context_max_chars": "Max context characters"
+          "context_max_chars": "Max context characters",
+          "auto_follow_up": "Auto follow-up after questions"
+        },
+        "data_description": {
+          "auto_follow_up": "Keeps the voice assistant listening in the same conversation when Hermes ends with a question, including short clarifications after it. Hermes is also prompted to keep follow-up questions short and as the final sentence."
         }
       }
     }
