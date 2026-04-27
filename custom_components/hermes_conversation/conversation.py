@@ -220,14 +220,16 @@ class HermesConversationEntity(
         messages: list[dict[str, str]],
     ) -> AsyncIterator[dict[str, str]]:
         """Yield assistant deltas for Home Assistant's chat log."""
-        yield {"role": "assistant"}
-
+        sent_role = False
         received_delta = False
 
         try:
             async for delta in self.client.async_stream_message(messages):
                 if not delta:
                     continue
+                if not sent_role:
+                    yield {"role": "assistant"}
+                    sent_role = True
                 received_delta = True
                 yield {"content": delta}
         except HermesApiError as err:
@@ -248,6 +250,8 @@ class HermesConversationEntity(
 
         response_text = await self.client.async_send_message(messages)
         if response_text:
+            if not sent_role:
+                yield {"role": "assistant"}
             yield {"content": response_text}
 
     async def _get_response(
@@ -279,7 +283,9 @@ class HermesConversationEntity(
             role = getattr(content, "role", None)
             message_text = getattr(content, "content", None)
 
-            if role not in ("user", "assistant", "system") or not message_text:
+            # The current system prompt is rebuilt for each turn, so we avoid
+            # replaying older system entries from Home Assistant's chat log.
+            if role not in ("user", "assistant") or not message_text:
                 continue
 
             history_messages.append({"role": role, "content": message_text})
