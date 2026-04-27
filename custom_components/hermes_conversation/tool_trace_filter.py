@@ -12,7 +12,7 @@ _TOOL_TRACE_PROMPT = (
     "or research steps in the user-facing answer. Only provide the final answer."
 )
 _FENCED_CODE_BLOCK_RE = re.compile(r"```(?:[^\n`]*\n)?(.*?)```", re.DOTALL)
-_INLINE_CODE_SPAN_RE = re.compile(r"`([^`]*)`", re.DOTALL)
+_INLINE_CODE_SPAN_RE = re.compile(r"`([^`]*)`")
 _LEADING_TOOL_LABEL_RE = re.compile(
     r"^(?:[^\w\s`]+\s*)?(?:"
     r"ha_[a-z0-9_]+|"
@@ -23,8 +23,8 @@ _LEADING_TOOL_LABEL_RE = re.compile(
     r")(?:\b|$)",
     re.IGNORECASE,
 )
-_TOOL_TRACE_LINE_PREFIXES = (
-    "┊",
+_ALWAYS_TOOL_TRACE_LINE_PREFIXES = ("┊",)
+_EMOJI_TOOL_TRACE_PREFIXES = (
     "🏠",
     "💻",
     "⚙️",
@@ -55,8 +55,8 @@ _TOOL_TRACE_LINE_PREFIXES = (
     "⚡",
 )
 _EMOJI_VARIATION_SELECTOR = "\ufe0f"
-_NORMALIZED_TOOL_TRACE_LINE_PREFIXES = tuple(
-    prefix.replace(_EMOJI_VARIATION_SELECTOR, "") for prefix in _TOOL_TRACE_LINE_PREFIXES
+_NORMALIZED_EMOJI_TOOL_TRACE_PREFIXES = tuple(
+    prefix.replace(_EMOJI_VARIATION_SELECTOR, "") for prefix in _EMOJI_TOOL_TRACE_PREFIXES
 )
 _TOOL_TRACE_NAMES = (
     "ha_list_entities",
@@ -132,9 +132,6 @@ def sanitize_response_text(response_text: str) -> str:
         sanitized_text,
     )
 
-    for placeholder, block_text in preserved_fenced_blocks.items():
-        sanitized_text = sanitized_text.replace(placeholder, block_text)
-
     kept_lines: list[str] = []
     for line in sanitized_text.splitlines():
         if looks_like_tool_trace(line):
@@ -145,6 +142,9 @@ def sanitize_response_text(response_text: str) -> str:
     sanitized_text = re.sub(r"\n{3,}", "\n\n", sanitized_text)
     sanitized_text = re.sub(r"[ \t]+\n", "\n", sanitized_text)
     sanitized_text = sanitized_text.strip()
+
+    for placeholder, block_text in preserved_fenced_blocks.items():
+        sanitized_text = sanitized_text.replace(placeholder, block_text)
 
     return sanitized_text or original_text
 
@@ -158,9 +158,7 @@ def looks_like_tool_trace(text: str, *, from_code: bool = False) -> bool:
     lowered_text = stripped_text.lower()
     normalized_text = lowered_text.strip("` ")
     normalized_prefix_text = stripped_text.replace(_EMOJI_VARIATION_SELECTOR, "")
-    if stripped_text.startswith(_TOOL_TRACE_LINE_PREFIXES):
-        return True
-    if normalized_prefix_text.startswith(_NORMALIZED_TOOL_TRACE_LINE_PREFIXES):
+    if stripped_text.startswith(_ALWAYS_TOOL_TRACE_LINE_PREFIXES):
         return True
     if stripped_text.startswith("$ "):
         return True
@@ -173,6 +171,35 @@ def looks_like_tool_trace(text: str, *, from_code: bool = False) -> bool:
         return True
     if _LEADING_TOOL_LABEL_RE.match(stripped_text):
         return True
+
+    emoji_remainder = _strip_emoji_tool_prefix(normalized_prefix_text)
+    if emoji_remainder is not None:
+        emoji_normalized_text = emoji_remainder.lower().strip("` ")
+        if any(
+            emoji_normalized_text == tool_name
+            or emoji_normalized_text.startswith(f"{tool_name} ")
+            or emoji_normalized_text.startswith(f"{tool_name}...")
+            for tool_name in _TOOL_TRACE_NAMES
+        ):
+            return True
+        if _LEADING_TOOL_LABEL_RE.match(emoji_remainder):
+            return True
+        if any(pattern.search(emoji_normalized_text) for pattern in _CODE_TRACE_PATTERNS):
+            return True
+
     if from_code:
         return any(pattern.search(stripped_text) for pattern in _CODE_TRACE_PATTERNS)
     return False
+
+
+def _strip_emoji_tool_prefix(text: str) -> str | None:
+    """Strip a known emoji prefix used by tool preview lines."""
+    for prefix in _EMOJI_TOOL_TRACE_PREFIXES:
+        if text.startswith(prefix):
+            return text[len(prefix) :].lstrip()
+
+    for prefix in _NORMALIZED_EMOJI_TOOL_TRACE_PREFIXES:
+        if text.startswith(prefix):
+            return text[len(prefix) :].lstrip()
+
+    return None
