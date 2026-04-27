@@ -54,6 +54,10 @@ _TOOL_TRACE_LINE_PREFIXES = (
     "🔀",
     "⚡",
 )
+_EMOJI_VARIATION_SELECTOR = "\ufe0f"
+_NORMALIZED_TOOL_TRACE_LINE_PREFIXES = tuple(
+    prefix.replace(_EMOJI_VARIATION_SELECTOR, "") for prefix in _TOOL_TRACE_LINE_PREFIXES
+)
 _TOOL_TRACE_NAMES = (
     "ha_list_entities",
     "ha_get_state",
@@ -108,18 +112,28 @@ def sanitize_response_text(response_text: str) -> str:
     if not original_text:
         return response_text
 
-    sanitized_text = _FENCED_CODE_BLOCK_RE.sub(
-        lambda match: ""
-        if looks_like_tool_trace(match.group(1), from_code=True)
-        else match.group(0),
-        response_text,
-    )
+    preserved_fenced_blocks: dict[str, str] = {}
+
+    def _replace_fenced_block(match: re.Match[str]) -> str:
+        block_text = match.group(0)
+        block_body = match.group(1)
+        if looks_like_tool_trace(block_body, from_code=True):
+            return ""
+
+        placeholder = f"__HERMES_FENCED_BLOCK_{len(preserved_fenced_blocks)}__"
+        preserved_fenced_blocks[placeholder] = block_text
+        return placeholder
+
+    sanitized_text = _FENCED_CODE_BLOCK_RE.sub(_replace_fenced_block, response_text)
     sanitized_text = _INLINE_CODE_SPAN_RE.sub(
         lambda match: ""
         if looks_like_tool_trace(match.group(1), from_code=True)
         else match.group(0),
         sanitized_text,
     )
+
+    for placeholder, block_text in preserved_fenced_blocks.items():
+        sanitized_text = sanitized_text.replace(placeholder, block_text)
 
     kept_lines: list[str] = []
     for line in sanitized_text.splitlines():
@@ -143,7 +157,10 @@ def looks_like_tool_trace(text: str, *, from_code: bool = False) -> bool:
 
     lowered_text = stripped_text.lower()
     normalized_text = lowered_text.strip("` ")
+    normalized_prefix_text = stripped_text.replace(_EMOJI_VARIATION_SELECTOR, "")
     if stripped_text.startswith(_TOOL_TRACE_LINE_PREFIXES):
+        return True
+    if normalized_prefix_text.startswith(_NORMALIZED_TOOL_TRACE_LINE_PREFIXES):
         return True
     if stripped_text.startswith("$ "):
         return True
