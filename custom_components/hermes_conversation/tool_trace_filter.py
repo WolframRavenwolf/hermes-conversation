@@ -85,7 +85,7 @@ _CODE_TRACE_PATTERNS = (
     re.compile(r"\bfrom hermes_tools import\b", re.IGNORECASE),
     re.compile(r"\bterminal\(", re.IGNORECASE),
     re.compile(r"\b(?:web_search|web_extract|web_crawl|execute_code)\b", re.IGNORECASE),
-    re.compile(r"^(?:\$+\s*)?(?:curl|python3?|bash|sh|jq|rg|git|ls)\b", re.IGNORECASE),
+    re.compile(r"^(?:\$+\s*)?(?:curl|python3?|bash|sh|jq|rg|git|ls)\b", re.IGNORECASE | re.MULTILINE),
     re.compile(r"\|\s*(?:python3?|jq|grep)\b", re.IGNORECASE),
 )
 
@@ -120,7 +120,10 @@ def sanitize_response_text(response_text: str) -> str:
         if looks_like_tool_trace(block_body, from_code=True):
             return ""
 
-        placeholder = f"__HERMES_FENCED_BLOCK_{len(preserved_fenced_blocks)}__"
+        placeholder = _make_fenced_block_placeholder(
+            response_text,
+            len(preserved_fenced_blocks),
+        )
         preserved_fenced_blocks[placeholder] = block_text
         return placeholder
 
@@ -193,13 +196,19 @@ def looks_like_tool_trace(text: str, *, from_code: bool = False) -> bool:
 
 
 def _strip_emoji_tool_prefix(text: str) -> str | None:
-    """Strip a known emoji prefix used by tool preview lines."""
-    for prefix in _EMOJI_TOOL_TRACE_PREFIXES:
-        if text.startswith(prefix):
-            return text[len(prefix) :].lstrip()
-
+    """Strip a normalized emoji prefix used by tool preview lines."""
     for prefix in _NORMALIZED_EMOJI_TOOL_TRACE_PREFIXES:
         if text.startswith(prefix):
             return text[len(prefix) :].lstrip()
 
     return None
+
+
+def _make_fenced_block_placeholder(original_text: str, index: int) -> str:
+    """Create a placeholder token that does not already appear in the response."""
+    suffix = 0
+    while True:
+        placeholder = f"__HERMES_FENCED_BLOCK_{index}_{suffix}__"
+        if placeholder not in original_text:
+            return placeholder
+        suffix += 1
